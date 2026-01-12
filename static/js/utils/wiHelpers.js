@@ -267,5 +267,50 @@ export const wiHelpers = {
                 openPath({ path: base, relative_to_base: true });
             }
         });
-    }
+    },
+    // 统一的时光机打开函数
+    handleOpenRollback(contextItem, currentData = null) {
+        let type, targetId, targetPath;
+
+        // 1. 判断上下文来源
+        if (contextItem) {
+            if (contextItem.type === 'embedded') {
+                // 情况 1 & 3: 嵌入式 (Embedded)
+                // 备份存储在角色卡 (card) 目录下，ID 为宿主角色 ID
+                type = 'card';
+                targetId = contextItem.card_id; 
+                targetPath = ""; 
+            } else {
+                // 情况 2: 独立文件 (Global / Resource)
+                type = 'lorebook';
+                targetId = contextItem.id;
+                // 优先使用 file_path (wiEditor), 其次 path (wiList item)
+                targetPath = contextItem.file_path || contextItem.path || "";
+            }
+        } else {
+            // 兜底：如果没有上下文对象，尝试直接使用当前编辑数据的 ID
+            console.warn("Rollback: Missing context item, inferring from data...");
+            type = 'lorebook';
+            targetId = currentData ? currentData.id : null;
+            targetPath = "";
+        }
+
+        if (!targetId) {
+            alert("无法确定目标 ID，无法打开时光机。");
+            return;
+        }
+
+        // 2. 触发全局事件
+        window.dispatchEvent(new CustomEvent('open-rollback', {
+            detail: {
+                type: type,
+                id: targetId,
+                path: targetPath,
+                // 传入当前数据用于"Current"版本实时Diff
+                editingData: currentData, 
+                // 传入文件上下文用于 rollbackModal 内部判断
+                editingWiFile: contextItem 
+            }
+        }));
+    },
 };

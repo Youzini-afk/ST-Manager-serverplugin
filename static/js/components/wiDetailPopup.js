@@ -67,20 +67,10 @@ export default function wiDetailPopup() {
         },
 
         // 打开时光机 (Rollback)
-        openRollback(type) {
+        openRollback() {
             this.showWiDetailModal = false; // 关闭当前小弹窗
-            
-            // 触发全局时光机事件
-            window.dispatchEvent(new CustomEvent('open-rollback', {
-                detail: {
-                    type: 'lorebook',
-                    id: this.activeWiDetail.id,
-                    path: this.activeWiDetail.path,
-                    // 不传 editingData，因为此时不在编辑器里，让 rollback 组件自己去读文件
-                    editingData: null, 
-                    editingWiFile: null 
-                }
-            }));
+
+            this.handleOpenRollback(this.activeWiDetail, null);
         }
     }
 }

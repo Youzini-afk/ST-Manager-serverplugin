@@ -1,5 +1,5 @@
 <!-- 世界书详情页模态框 (WI Detail Modal) -->
-<div x-data="wiDetailPopup" x-show="showWiDetailModal" x-cloak class="modal-overlay z-top-modal">
+<div x-data="wiDetailPopup" x-show="showWiDetailModal" x-cloak class="modal-overlay z-modal-std">
     <div
         class="bg-[var(--bg-panel)] border border-[var(--border-light)] rounded-lg shadow-2xl p-6 w-[500px] flex flex-col gap-4 text-[var(--text-main)]">
         <div class="flex justify-between items-start border-b border-[var(--border-light)] pb-4">
@@ -32,8 +32,9 @@
                 <span>🔖</span> <span>关键快照</span>
             </button>
 
-            <button @click="openRollback('lorebook')"
-                class="btn-secondary py-2 flex flex-col items-center justify-center gap-1 text-yellow-500">
+            <button @click="openRollback()"
+                class="btn-secondary py-2 flex flex-col items-center justify-center gap-1 transition-colors"
+                :class="$store.global.isDarkMode ? 'text-yellow-400 hover:text-yellow-300' : 'text-yellow-600 hover:text-yellow-700'">
                 <span>⏪</span> <span>时光机 (回滚)</span>
             </button>
             <button @click="openBackupFolder('lorebook')"

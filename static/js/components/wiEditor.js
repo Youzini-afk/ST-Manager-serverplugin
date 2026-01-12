@@ -91,6 +91,10 @@ export default function wiEditor() {
             });
         },
 
+        openRollback() {
+            this.handleOpenRollback(this.editingWiFile, this.editingData);
+        },
+
         getTotalWiTokens() {
             // 必须传入当前的条目数组
             return getTotalWiTokens(this.getWIArrayRef());

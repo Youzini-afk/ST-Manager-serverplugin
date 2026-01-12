@@ -2,7 +2,7 @@
 
 <div x-data="contextMenu" x-show="visible" @click.away="hideContextMenu"
     :style="{ top: y + 'px', left: x + 'px' }"
-    class="fixed z-50 shadow-xl rounded-lg py-1 w-56 overflow-hidden"
+    class="fixed z-context-menu shadow-xl rounded-lg py-1 w-56 overflow-hidden"
     style="background: var(--bg-panel); border: 1px solid var(--border-light); display:none;">
     <template x-if="type === 'folder'">
         <div>

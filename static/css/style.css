@@ -49,7 +49,24 @@
     --bg-image-url: none;         /* 背景图 URL */
     --bg-overlay-opacity: 0.95;   /* 遮罩不透明度 (默认很高，接近纯色) */
     --bg-blur: 0px;               /* 背景模糊度 */
+
+    /* === Z-Index 层级管理系统 === */
+    --z-base: 0;
+    --z-floating: 100;        /* 卡片内部的悬浮按钮 */
+    --z-modal-std: 1000;      /* 标准模态框 (详情页, 设置) */
+    --z-modal-editor: 2000;   /* 全屏编辑器 (世界书) */
+    --z-modal-popover: 3000;  /* 功能性弹窗 (时光机, 大编辑器, 标签选择) */
+    --z-context-menu: 9000;   /* 右键菜单 */
+    --z-toast: 9500;          /* 全局通知 */
+    --z-loading: 9999;        /* 加载遮罩 (最高) */
 }
+
+/* 通用 Z-Index 工具类 */
+.z-modal-std { z-index: var(--z-modal-std) !important; }
+.z-modal-editor { z-index: var(--z-modal-editor) !important; }
+.z-modal-popover { z-index: var(--z-modal-popover) !important; }
+.z-context-menu { z-index: var(--z-context-menu) !important; }
+.z-topmost { z-index: var(--z-loading) !important; }
 
 /* === 浅色模式覆盖值 (Light Mode Overrides) === */
 html.light-mode {

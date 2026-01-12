@@ -1,5 +1,5 @@
 <!-- 全屏世界书 -->
-<div x-show="showFullScreenWI" x-data="wiEditor" x-cloak class="fixed inset-0 z-[99999] flex flex-col"
+<div x-show="showFullScreenWI" x-data="wiEditor" x-cloak class="fixed inset-0 z-modal-editor flex flex-col"
     style="background: var(--bg-body); color: var(--text-main);" @click.self="showFullScreenWI=false">
 
     <!-- 顶部栏 -->
@@ -61,6 +61,12 @@
         <div class="flex gap-3 ml-4 flex-shrink-0 items-center">
             <!-- 备份/快照按钮组 -->
             <div class="flex gap-1">
+                <button @click="openRollback()" 
+                    class="btn-secondary px-2 py-1.5 flex items-center justify-center transition-colors"
+                    :class="$store.global.isDarkMode ? 'text-yellow-400 hover:text-yellow-300' : 'text-yellow-600 hover:text-yellow-700'"
+                    title="时光机：查看历史版本与回滚">
+                    ⏪
+                </button>
                 <!-- 按钮1：快照 (左键普通，右键关键) -->
                 <button @click="createSnapshot('lorebook')" @contextmenu.prevent="createKeySnapshot('lorebook')"
                     :title="(!editingWiFile || editingWiFile.type === 'embedded') ? '备份当前角色卡 (左键: 普通 | 右键: 关键节点)' : '备份当前世界书 (左键: 普通 | 右键: 关键节点)'"
