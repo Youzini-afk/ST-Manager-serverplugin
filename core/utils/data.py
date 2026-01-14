@@ -176,3 +176,28 @@ def get_wi_meta(data_block):
             if has_wi:
                 wi_name = cb.get('name', 'World Info')
     return has_wi, wi_name
+
+def sanitize_for_utf8(obj, dirty_tracker=None):
+    """
+    递归清洗对象中的字符串。
+    :param obj: 要清洗的对象 (dict, list, str)
+    :param dirty_tracker: (可选) 传入一个列表。如果发现并修复了乱码，会向列表 append(True)。
+    """
+    if isinstance(obj, str):
+        try:
+            # 尝试严格编码，如果成功则直接返回（性能最好）
+            obj.encode('utf-8')
+            return obj
+        except UnicodeEncodeError:
+            # 捕获异常，标记脏数据
+            if isinstance(dirty_tracker, list):
+                dirty_tracker.append(True)
+            # 执行修复：忽略非法字符
+            return obj.encode('utf-8', 'ignore').decode('utf-8')
+            
+    elif isinstance(obj, dict):
+        return {k: sanitize_for_utf8(v, dirty_tracker) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_utf8(v, dirty_tracker) for v in obj]
+    else:
+        return obj

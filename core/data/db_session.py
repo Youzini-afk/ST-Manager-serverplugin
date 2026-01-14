@@ -10,7 +10,7 @@ from core.config import CARDS_FOLDER, DEFAULT_DB_PATH
 
 # === 工具函数 (用于数据迁移) ===
 from core.utils.image import extract_card_info
-from core.utils.data import get_wi_meta
+from core.utils.data import get_wi_meta, sanitize_for_utf8
 from core.utils.text import calculate_token_count
 from core.utils.hash import get_file_hash_and_size
 from core.utils.filesystem import is_card_file
@@ -211,6 +211,7 @@ def _migrate_existing_data(conn):
     error_count = 0
     
     for full_path in file_list:
+        clean_path = sanitize_for_utf8(full_path)
         try:
             # 计算相对路径 ID (统一使用 / 作为分隔符)
             rel_path = os.path.relpath(full_path, CARDS_FOLDER)
@@ -228,7 +229,7 @@ def _migrate_existing_data(conn):
             except Exception as e:
                 # 即使哈希失败也继续，只是哈希为空
                 file_hash, file_size = "", 0
-                print(f"File access error: {full_path} - {e}")
+                print(f"File access error: {clean_path} - {e}")
             
             # 解析卡片内容
             info = extract_card_info(full_path)
@@ -249,7 +250,7 @@ def _migrate_existing_data(conn):
             tags = list(dict.fromkeys([str(t).strip() for t in tags if str(t).strip()])) # 去重
             
             # 处理名称
-            char_name = info.get('name') or data_block.get('name') or os.path.splitext(os.path.basename(full_path))[0]
+            char_name = info.get('name') or data_block.get('name') or os.path.splitext(os.path.basename(clean_path))[0]
             
             # 获取修改时间
             try:
@@ -295,7 +296,7 @@ def _migrate_existing_data(conn):
                     conn.rollback()
                     
         except Exception as outer_e:
-            print(f"❌ 处理文件异常: {full_path} - {outer_e}")
+            print(f"❌ 处理文件异常: {clean_path} - {outer_e}")
             error_count += 1
             continue
     

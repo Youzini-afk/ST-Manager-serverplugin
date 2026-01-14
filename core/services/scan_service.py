@@ -16,7 +16,7 @@ from core.services.cache_service import schedule_reload
 from core.utils.filesystem import is_card_file
 from core.utils.image import extract_card_info
 from core.utils.text import calculate_token_count
-from core.utils.data import get_wi_meta
+from core.utils.data import get_wi_meta, sanitize_for_utf8
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +156,7 @@ def _perform_scan_logic():
                 category = rel_path.replace('\\', '/')
             
             for file in files:
+                file = sanitize_for_utf8(file)
                 if not is_card_file(file):
                     continue
                 

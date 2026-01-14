@@ -1,6 +1,7 @@
 import os
 import logging
 import threading
+import traceback
 from flask import Flask
 
 # === 基础设施 ===
@@ -80,4 +81,5 @@ def init_services():
         
     except Exception as e:
         logger.error(f"Service initialization failed: {e}")
+        traceback.print_exc() 
         ctx.set_status(status="error", message=f"启动失败: {e}")

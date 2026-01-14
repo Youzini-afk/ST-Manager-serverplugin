@@ -7,7 +7,7 @@ import logging
 from PIL import Image, PngImagePlugin
 from core.consts import SIDECAR_EXTENSIONS
 from core.config import INTERNAL_DIR
-from core.utils.data import normalize_card_v3, deterministic_sort
+from core.utils.data import normalize_card_v3, deterministic_sort, sanitize_for_utf8
 from core.utils.filesystem import save_json_atomic
 
 logger = logging.getLogger(__name__)
@@ -18,64 +18,80 @@ def get_default_card_image_path():
 
 def extract_card_info(filepath):
     try:
+        data = None
         # 1. 处理 JSON 文件
         if filepath.lower().endswith('.json'):
-            with open(filepath, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        
-        # 2. 处理 PNG 文件
-        with Image.open(filepath) as img:
-            # === 强制加载图片数据，确保读取到完整元数据 ===
-            img.load()
-            
-            metadata = img.info or {}
-            raw = metadata.get('chara') or metadata.get('ccv3')
-            
-            if not raw:
-                return None
-
-            # === 策略 A: 尝试直接解析为 JSON (针对某些 V3 卡片直接存明文的情况) ===
-            try:
-                # 某些特殊情况下 raw 可能是 bytes，先尝试转 str 判断是否以 { 开头
-                raw_str = raw
-                if isinstance(raw_str, bytes):
-                    raw_str = raw_str.decode('utf-8', errors='ignore')
-                raw_str = str(raw_str).strip()
+            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                data = json.load(f)
+        else:
+            # 2. 处理 PNG 文件
+            with Image.open(filepath) as img:
+                # === 强制加载图片数据，确保读取到完整元数据 ===
+                img.load()
                 
-                if raw_str.startswith('{') or raw_str.startswith('['):
-                    return json.loads(raw_str)
-            except:
-                pass
-
-            # === 策略 B: 你的旧版逻辑 (最稳健的标准 Base64 解码) ===
-            # 这是大多数 TavernAI 卡片的标准格式
-            try:
-                # 直接交给 b64decode，它能很好地处理 bytes，不需要我们可以转 string
-                decoded = base64.b64decode(raw).decode('utf-8')
-                return json.loads(decoded)
-            except:
-                pass
-
-            # === 策略 C: 增强型 Base64 解码 (处理 Padding 缺失等边缘情况) ===
-            # 如果策略 B 失败，尝试手动修复 Padding
-            try:
-                if isinstance(raw, bytes):
-                    raw = raw.decode('utf-8', errors='ignore')
-                raw = str(raw).strip()
-                padded = raw + ('=' * (-len(raw) % 4))
+                metadata = img.info or {}
+                raw = metadata.get('chara') or metadata.get('ccv3')
                 
-                # 尝试 URL-Safe 解码 (部分 Web 工具生成的卡片)
+                if not raw:
+                    return None
+
+                result = None
+
+                # === 策略 A: 尝试直接解析为 JSON (针对某些 V3 卡片直接存明文的情况) ===
                 try:
-                    decoded = base64.urlsafe_b64decode(padded).decode('utf-8', errors='ignore')
-                    return json.loads(decoded)
+                    # 某些特殊情况下 raw 可能是 bytes，先尝试转 str 判断是否以 { 开头
+                    raw_str = raw
+                    if isinstance(raw_str, bytes):
+                        raw_str = raw_str.decode('utf-8', errors='ignore')
+                    raw_str = str(raw_str).strip()
+                    
+                    if raw_str.startswith('{') or raw_str.startswith('['):
+                        result = json.loads(raw_str)
                 except:
-                    # 尝试标准解码 + Padding
-                    decoded = base64.b64decode(padded).decode('utf-8', errors='ignore')
-                    return json.loads(decoded)
-            except:
-                pass
+                    pass
 
-            return None
+                # === 策略 B: 你的旧版逻辑 (最稳健的标准 Base64 解码) ===
+                if result is None:
+                    try:
+                        # 直接交给 b64decode，它能很好地处理 bytes，不需要我们可以转 string
+                        decoded = base64.b64decode(raw).decode('utf-8')
+                        result = json.loads(decoded)
+                    except:
+                        pass
+
+                # === 策略 C: 增强型 Base64 解码 (处理 Padding 缺失等边缘情况) ===
+                if result is None:
+                    try:
+                        if isinstance(raw, bytes):
+                            raw = raw.decode('utf-8', errors='ignore')
+                        raw = str(raw).strip()
+                        padded = raw + ('=' * (-len(raw) % 4))
+                        
+                        # 尝试 URL-Safe 解码 (部分 Web 工具生成的卡片)
+                        try:
+                            decoded = base64.urlsafe_b64decode(padded).decode('utf-8', errors='ignore')
+                            result = json.loads(decoded)
+                        except:
+                            # 尝试标准解码 + Padding
+                            decoded = base64.b64decode(padded).decode('utf-8', errors='ignore')
+                            result = json.loads(decoded)
+                    except:
+                        pass
+
+                data = result
+        if data:
+            dirty_flags = []
+            cleaned_data = sanitize_for_utf8(data, dirty_tracker=dirty_flags)
+            
+            if dirty_flags:
+                # 打印醒目的日志
+                msg = f"⚠️ [自动修复] 检测到元数据编码异常 (Unicode Error)，已过滤非法字符: {filepath}"
+                print(msg) 
+                logger.warning(msg)
+                
+            return cleaned_data
+
+        return None
 
     except Exception as e:
         # print(f"Error parsing {filepath}: {e}") # 调试用
