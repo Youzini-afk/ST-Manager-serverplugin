@@ -20,10 +20,16 @@ export default function wiDetailPopup() {
         wiData: null,         // 完整的 WI 对象
         wiEntries: [],        // 归一化后的条目数组
         description: "",      // 世界书描述
-        
+
         // 搜索过滤
         searchTerm: "",
         activeEntry: null,
+
+        highlightEntryKey: null,   // 用于滚动定位后的短暂高亮
+        highlightTimer: null,
+
+        uiFilter: null,    // 'enabled' | 'disabled' | null
+        uiStrategy: null,  // 'constant' | 'vector' | 'normal' | null
 
         // 引入工具函数
         formatWiKeys,
@@ -36,13 +42,17 @@ export default function wiDetailPopup() {
                 this.activeWiDetail = e.detail;
                 this.showWiDetailModal = true;
                 this.searchTerm = "";
-                this.activeEntry = null
+                this.activeEntry = null;
+                this.uiFilter = null;
+                this.uiStrategy = null;
                 this.loadContent();
             });
-            
+
             // 监听关闭事件 (如果其他组件需要强制关闭它)
             window.addEventListener('close-wi-detail-modal', () => {
                 this.showWiDetailModal = false;
+                this.highlightEntryKey = null;
+                if (this.highlightTimer) clearTimeout(this.highlightTimer);
             });
         },
 
@@ -55,10 +65,25 @@ export default function wiDetailPopup() {
                 const keys = Array.isArray(e.keys) ? e.keys.join(' ') : (e.keys || '');
                 const content = e.content || '';
                 const comment = e.comment || '';
-                return keys.toLowerCase().includes(lower) || 
-                       content.toLowerCase().includes(lower) ||
-                       comment.toLowerCase().includes(lower);
+                return keys.toLowerCase().includes(lower) ||
+                    content.toLowerCase().includes(lower) ||
+                    comment.toLowerCase().includes(lower);
             });
+        },
+
+        get uiFilteredEntries() {
+            let arr = this.filteredEntries || [];
+
+            // 1) Enabled / Disabled
+            if (this.uiFilter === 'enabled') arr = arr.filter(e => !!e.enabled);
+            if (this.uiFilter === 'disabled') arr = arr.filter(e => !e.enabled);
+
+            // 2) Strategy
+            if (this.uiStrategy === 'constant') arr = arr.filter(e => !!e.constant);
+            if (this.uiStrategy === 'vector') arr = arr.filter(e => !e.constant && !!e.vectorized);
+            if (this.uiStrategy === 'normal') arr = arr.filter(e => !e.constant && !e.vectorized);
+
+            return arr;
         },
 
         // 格式化时间戳
@@ -72,8 +97,51 @@ export default function wiDetailPopup() {
         },
 
         // 选中某个条目查看详情
-        selectEntry(entry) {
+        selectEntry(entry, shouldScroll = false) {
             this.activeEntry = entry;
+            if (shouldScroll) {
+                this.$nextTick(() => this.scrollToEntry(entry));
+            }
+        },
+
+        scrollToEntry(entry) {
+            if (!entry) return;
+
+            // 1) 计算条目的 DOM id（要与 HTML :id 拼接规则一致）
+            // entry.id 优先；否则用 insertion_order + 在 uiFilteredEntries 中的 idx
+            let idx = -1;
+            if (this.uiFilteredEntries && this.uiFilteredEntries.length) {
+                idx = this.uiFilteredEntries.indexOf(entry);
+                if (idx === -1 && entry.id) {
+                    idx = this.uiFilteredEntries.findIndex(e => e.id === entry.id);
+                }
+            }
+
+            const keyPart = entry.id || ((entry.insertion_order ?? 'x') + '-' + (idx !== -1 ? idx : 0));
+            const domId = `wi-reader-entry-${keyPart}`;
+
+            // 2) 找到滚动容器：中间阅读流的绝对定位滚动层
+            // 你当前结构是 .wi-reader-main > .absolute.inset-0(overflow-y-auto)
+            const scrollContainer = document.querySelector('.wi-reader-main .custom-scrollbar');
+            const el = document.getElementById(domId);
+
+            if (!el) return;
+
+            // 3) 滚动：优先对容器滚动（避免整个页面滚）
+            // 使用 scrollIntoView 在大多数情况下就够了，它会找到最近可滚动祖先
+            try {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            } catch {
+                // 旧浏览器兜底
+                el.scrollIntoView();
+            }
+
+            // 4) 短暂高亮（不改变 active 样式，只做“定位闪一下”）
+            this.highlightEntryKey = keyPart;
+            if (this.highlightTimer) clearTimeout(this.highlightTimer);
+            this.highlightTimer = setTimeout(() => {
+                this.highlightEntryKey = null;
+            }, 900);
         },
 
         async loadContent() {
@@ -81,6 +149,9 @@ export default function wiDetailPopup() {
             this.isLoading = true;
             this.wiEntries = [];
             this.description = "";
+            this.activeEntry = null;
+            if (this.highlightTimer) clearTimeout(this.highlightTimer);
+            this.highlightEntryKey = null;
 
             try {
                 let rawData = null;
@@ -92,7 +163,7 @@ export default function wiDetailPopup() {
                         rawData = res.card.character_book;
                         this.description = res.card.description || ""; // 嵌入式可能显示角色描述? 或者不显示
                     }
-                } 
+                }
                 // 2. 如果是独立文件 (Global/Resource)
                 else {
                     const res = await getWorldInfoDetail({
@@ -127,7 +198,7 @@ export default function wiDetailPopup() {
         // 删除当前世界书
         deleteCurrentWi() {
             if (!this.activeWiDetail) return;
-            
+
             // 双重保险：如果是嵌入式，直接返回
             if (this.activeWiDetail.type === 'embedded') {
                 alert("无法直接删除内嵌世界书，请去角色卡编辑界面操作。");
@@ -155,21 +226,21 @@ export default function wiDetailPopup() {
         // 联动跳转编辑器
         enterWiEditorFromDetail(specificEntry = null) {
             const targetEntry = specificEntry || this.activeEntry;
-            
+
             let jumpToIndex = 0;
             if (targetEntry && this.wiEntries.length > 0) {
                 // 1. 优先尝试直接对象引用匹配 (最准确)
                 let idx = this.wiEntries.indexOf(targetEntry);
-                
+
                 // 2. 如果引用匹配失败 (极少见，防Proxy问题)，尝试 ID 匹配
                 if (idx === -1 && targetEntry.id) {
                     idx = this.wiEntries.findIndex(e => e.id === targetEntry.id);
                 }
-                
+
                 // 3. 如果 ID 也没有或匹配失败，尝试 "指纹" 匹配 (内容+备注+关键词)
                 if (idx === -1) {
-                    idx = this.wiEntries.findIndex(e => 
-                        e.content === targetEntry.content && 
+                    idx = this.wiEntries.findIndex(e =>
+                        e.content === targetEntry.content &&
                         e.comment === targetEntry.comment &&
                         JSON.stringify(e.keys) === JSON.stringify(targetEntry.keys)
                     );
@@ -181,15 +252,15 @@ export default function wiDetailPopup() {
             }
 
             this.showWiDetailModal = false;
-            
+
             // 构造事件数据
-            const detailData = { 
+            const detailData = {
                 ...this.activeWiDetail,
-                jumpToIndex: jumpToIndex 
+                jumpToIndex: jumpToIndex
             };
 
-            window.dispatchEvent(new CustomEvent('open-wi-editor', { 
-                detail: detailData 
+            window.dispatchEvent(new CustomEvent('open-wi-editor', {
+                detail: detailData
             }));
         },
 
