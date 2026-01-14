@@ -8,6 +8,10 @@
     --accent-light: #60a5fa;      /* 亮色/边框色 */
     --accent-faint: rgba(37, 99, 235, 0.3); /* 淡淡的背景/光晕 */
 
+    /* === 收藏相关颜色 === */
+    --accent-favorite: #fbbf24;      /* 收藏强调色 */
+    --accent-favorite-faint: rgba(251, 191, 36, 0.2); /* 收藏淡色背景 */
+
     /* === 深色模式默认值 (Dark Mode Defaults) === */
     --bg-body: #030712;           /* 页面最底层背景 */
     --bg-panel: #111827;          /* 卡片、侧边栏、模态框背景 */
@@ -103,4 +107,7 @@ html.light-mode {
     --btn-sec-bg: #ffffff;
     --btn-sec-text: #4b5563;
     --btn-sec-border: #d1d5db;
+
+    --accent-favorite: #f59e0b;      /* 浅色模式下的收藏色 */
+    --accent-favorite-faint: rgba(245, 158, 11, 0.2);
 }

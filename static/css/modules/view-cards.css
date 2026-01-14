@@ -130,3 +130,34 @@ html.light-mode .btn-note-preview:hover {
     background-color: #f3f4f6;
     color: var(--accent-main);
 }
+.st-card.favorite {
+    border: 2px solid var(--accent-favorite);
+    box-shadow: 0 0 0 2px var(--accent-favorite-faint);
+    animation: favorite-pulse 2s infinite;
+}
+
+@keyframes favorite-pulse {
+    0% { 
+        box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4);
+        transform: translateY(0);
+    }
+    50% { 
+        box-shadow: 0 0 0 8px rgba(251, 191, 36, 0);
+        transform: translateY(-2px);
+    }
+    100% { 
+        box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+        transform: translateY(0);
+    }
+}
+
+/* 收藏按钮动画 */
+.st-card.favorite .favorite-btn {
+    animation: favorite-btn-bounce 0.3s ease-out;
+}
+
+@keyframes favorite-btn-bounce {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}

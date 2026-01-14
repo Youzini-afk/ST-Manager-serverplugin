@@ -24,9 +24,9 @@
                     @click.stop="handleCardClick($event, card)" draggable="true" @dragstart="dragStart($event, card)">
 
                     <button @click.stop="toggleCardFav(card)"
-                        class="absolute top-2 right-2 z-30 w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm backdrop-blur-md border"
-                        :class="card.is_favorite ? 'bg-yellow-400/20 border-yellow-400 text-yellow-400 opacity-100' : 'bg-black/30 border-white/20 text-white/50 opacity-0 group-hover:opacity-100 hover:bg-black/50 hover:text-yellow-200'">
-                        <span class="text-sm transform transition-transform active:scale-125"
+                        class="absolute top-2 right-2 z-30 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm backdrop-blur-md border"
+                        :class="card.is_favorite ? 'bg-yellow-400/30 border-yellow-400 text-yellow-400 opacity-100 scale-110' : 'bg-black/30 border-white/20 text-white/50 opacity-0 group-hover:opacity-100 hover:bg-black/50 hover:text-yellow-200 scale-100'">
+                        <span class="text-lg transform transition-transform active:scale-125"
                             x-text="card.is_favorite ? '★' : '☆'"></span>
                     </button>
                     <!-- 选择勾选框 -->
@@ -44,7 +44,7 @@
                             onerror="this.onerror=null; this.src='/static/images/default_card.png';">
                         <!-- 右上角徽章 -->
                         <div
-                            style="position: absolute; top: 0.5rem; right: 0.5rem; z-index: 10; display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; pointer-events: none;">
+                            style="position: absolute; top: 0.5rem; right: 2.5rem; z-index: 10; display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; pointer-events: none;">
                             <div x-show="card.is_bundle"
                                 style="background: rgba(0,0,0,0.75); color: #fbbf24; border: 1px solid #fbbf24; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;">
                                 📦 v<span x-text="card.versions ? card.versions.length : 0"></span>
