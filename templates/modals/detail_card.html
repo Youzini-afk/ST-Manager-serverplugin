@@ -165,7 +165,7 @@
                     <!-- Token 显示 (放在中间偏右) -->
                     <div class="topbar-token" title="预估 Token（含世界书）">
                         <span class="topbar-token-label">Tokens</span>
-                        <span class="topbar-token-value"
+                        <span class="topbar-token-value text-neon"
                             :class="totalTokenCount > 20000 ? 'danger' : (totalTokenCount > 5000 ? 'warn' : 'ok')"
                             x-text="totalTokenCount"></span>
                     </div>
@@ -173,7 +173,7 @@
                     <!-- 修改时间显示 -->
                     <div class="topbar-token border-r-0 pl-3 ml-2 border-l border-[var(--border-light)]" title="最后修改时间">
                         <span class="topbar-token-label">Last Modified</span>
-                        <span class="text-xs font-mono font-bold" style="color: var(--text-main);"
+                        <span class="text-xs font-mono font-bold text-neon" style="color: var(--text-main);"
                             x-text="formatDate(activeCard.last_modified)"></span>
                     </div>
 

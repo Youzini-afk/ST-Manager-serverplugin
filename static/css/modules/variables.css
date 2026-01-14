@@ -44,6 +44,14 @@
     --card-height: 28rem;         /* 卡片高度 */
     --app-font-family: ui-sans-serif, system-ui, sans-serif; /* 全局字体 */
 
+    /* 增强质感的光影变量 */
+    --bg-panel-rgb: 30, 41, 59;
+    --glass-bg: rgba(var(--bg-panel-rgb), 0.7);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --shadow-elevation: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
+    --shadow-inset: inset 0 2px 4px 0 rgba(0, 0, 0, 0.15);
+    --accent-main-rgb: 99, 102, 241;
+
     /* 背景图相关 */
     --bg-image-url: none;         /* 背景图 URL */
     --bg-overlay-opacity: 0.95;   /* 遮罩不透明度 (默认很高，接近纯色) */

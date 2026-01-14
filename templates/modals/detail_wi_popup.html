@@ -1,5 +1,3 @@
---- START OF FILE detail_wi_popup.html ---
-
 <!-- 世界书阅览室 (Inspector Modal) -->
 <div x-data="wiDetailPopup" x-show="showWiDetailModal" x-cloak class="modal-overlay z-modal-std flex items-center justify-center p-4">
     
@@ -8,7 +6,7 @@
          @click.self="activeEntry = null">
 
         <!-- === 左侧：书本元数据与操作区 (固定宽度 280px) === -->
-        <div class="w-full md:w-[280px] flex-shrink-0 bg-[var(--bg-sub)] border-b md:border-b-0 md:border-r border-[var(--border-main)] flex flex-col h-full z-10 relative">
+        <div class="wi-detail-sidebar w-full md:w-[280px] flex-shrink-0 bg-[var(--bg-sub)] border-b md:border-b-0 md:border-r border-[var(--border-main)] flex flex-col h-full z-10 relative">
             
             <!-- 1. 顶部标头 -->
             <div class="p-5 border-b border-[var(--border-light)]">
@@ -43,7 +41,7 @@
                     </div>
                     <div class="bg-[var(--bg-body)] p-2 rounded border border-[var(--border-light)] text-center">
                         <div class="text-[10px] text-gray-500 uppercase font-bold">Tokens</div>
-                        <div class="text-xl font-mono font-bold text-green-500" x-text="totalTokens">0</div>
+                        <div class="text-xl font-mono font-bold text-green-500 text-neon" x-text="totalTokens">0</div>
                     </div>
                 </div>
 
@@ -139,6 +137,7 @@
                         <template x-for="(entry, idx) in filteredEntries" :key="entry.id || idx">
                             <div class="wi-inspect-card group" 
                                  :class="{'active ring-2 ring-accent-main ring-offset-2 ring-offset-[var(--bg-body)]': activeEntry === entry}"
+                                 :data-status="entry.constant ? 'constant' : (entry.vectorized ? 'vector' : (entry.enabled ? 'normal' : 'disabled'))"
                                  @click="selectEntry(entry)"
                                  @dblclick="enterWiEditorFromDetail(entry)"> <!-- 支持双击条目直接跳转 -->
                                 
@@ -181,7 +180,7 @@
 
                 <!-- B. 条目详情面板 (绝对定位 Overlay) -->
                 <!-- 改用 absolute 覆盖在网格之上，避免 flex 挤压导致的网格重排 -->
-                <div class="absolute top-0 right-0 bottom-0 w-[320px] xl:w-[400px] border-l border-[var(--border-main)] bg-[var(--bg-panel)] flex flex-col shadow-2xl z-30"
+                <div class="wi-detail-overlay absolute top-0 right-0 bottom-0 w-[320px] xl:w-[400px] border-l border-[var(--border-main)] bg-[var(--bg-panel)] flex flex-col shadow-2xl z-30"
                      x-show="activeEntry"
                      style="box-shadow: -10px 0 30px rgba(0,0,0,0.2);"
                      x-transition:enter="transition ease-out duration-300 transform"

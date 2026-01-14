@@ -243,3 +243,8 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
     transition: color 0.2s; margin-left: 0.5rem; display: inline-flex; align-items: center;
 }
 .expand-btn:hover { color: var(--text-main); }
+/* 霓虹文字特效 (用于 Token 计数等关键数据) */
+.text-neon {
+    text-shadow: 0 0 5px currentColor;
+    opacity: 0.9;
+}

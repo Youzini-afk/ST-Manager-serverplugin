@@ -49,7 +49,7 @@
                 <div class="hidden lg:flex flex-col items-end mr-4 px-3 border-r border-[var(--border-light)]"
                     title="预估总 Token">
                     <span class="text-[9px] text-gray-500 uppercase font-bold">Tokens</span>
-                    <span class="text-xs font-mono font-bold"
+                    <span class="text-xs font-mono font-bold text-neon"
                         :class="(typeof getTotalWiTokens === 'function' && getTotalWiTokens() > 10000) ? 'text-red-400' : 'text-green-400'"
                         x-text="typeof getTotalWiTokens === 'function' ? getTotalWiTokens() : 0">
                     </span>
@@ -132,6 +132,7 @@
                             @dragstart="wiDragStart($event, index)" @drop="wiDrop($event, index)"
                             @dragover="wiDragOver($event, index)"
                             class="wi-list-item p-2 rounded cursor-pointer group relative text-xs select-none border border-transparent"
+                            :data-type="entry.constant ? 'const' : (entry.vectorized ? 'vector' : 'normal')"
                             :class="currentWiIndex === index ? 'active' : ''">
 
                             <div class="flex justify-between items-center mb-1">
@@ -251,7 +252,7 @@
 
                         <div class="wi-content-wrapper relative" :class="{'bg-purple-900/5': isEditingClipboard}">
                             <label
-                                class="absolute top-2 right-6 z-10 text-[10px] px-2 py-0.5 rounded border pointer-events-none opacity-80"
+                                class="text-neon absolute top-2 right-6 z-10 text-[10px] px-2 py-0.5 rounded border pointer-events-none opacity-80"
                                 :class="isEditingClipboard ? 'text-purple-400 bg-purple-900/20 border-purple-500/30' : 'text-gray-500 bg-[var(--bg-panel)] border-[var(--border-light)]'">
                                 CONTENT <span
                                     x-text="typeof estimateTokens === 'function' ? ('(' + estimateTokens(activeEditorEntry.content) + ' T)') : ''"></span>
