@@ -28,7 +28,7 @@ from core.utils.image import (
     extract_card_info, write_card_metadata,
     find_sidecar_image, clean_thumbnail_cache,
     clean_sidecar_images, resize_image_if_needed )
-from core.utils.filesystem import safe_move_to_trash, is_card_file
+from core.utils.filesystem import safe_move_to_trash, is_card_file, sanitize_filename
 from core.utils.hash import get_file_hash_and_size
 from core.utils.text import calculate_token_count
 from core.utils.data import get_wi_meta, normalize_card_v3, deterministic_sort
@@ -1016,8 +1016,10 @@ def api_import_from_url():
         # 尝试从 URL 中解析文件名
         parsed_url = urlparse(url)
         filename = os.path.basename(unquote(parsed_url.path))
-        if not filename or not filename.lower().endswith('.png'):
-            # 如果 URL 没有文件名或不是 png，尝试从 Content-Disposition 获取，或者使用时间戳
+        valid_exts = ('.png', '.json')
+
+        if not filename or not filename.lower().endswith(valid_exts):
+            # 如果 URL 没有文件名或不是支持的格式，尝试从 Content-Disposition 获取，或者使用时间戳
             cd = resp.headers.get('content-disposition')
             if cd:
                 # 简单的解析，实际可能需要更复杂的正则
@@ -1025,7 +1027,7 @@ def api_import_from_url():
                 fname = re.findall('filename="?([^"]+)"?', cd)
                 if fname: filename = fname[0]
             
-            if not filename or not filename.lower().endswith('.png'):
+            if not filename or not filename.lower().endswith(valid_exts):
                 filename = f"import_{int(time.time())}.png"
 
         # 3. 保存到临时文件进行检测
@@ -1046,6 +1048,17 @@ def api_import_from_url():
         target_dir = os.path.join(CARDS_FOLDER, target_category)
         if not os.path.exists(target_dir):
             os.makedirs(target_dir)
+
+        # 尝试从 info 中获取角色名并清理作为文件名 (SillyTavern 风格)
+        data_block = info.get('data', {}) if 'data' in info else info
+        char_name = info.get('name') or data_block.get('name')
+        
+        if char_name:
+            safe_name = sanitize_filename(char_name)
+            # 保留原文件的扩展名
+            _, ext = os.path.splitext(filename)
+            if not ext: ext = ".png"
+            filename = f"{safe_name}{ext}"
 
         # 使用角色名作为文件名的一部分，或者保持原名
         # 这里尽量保持原文件名，但处理重名
