@@ -22,6 +22,7 @@ from core.consts import SIDECAR_EXTENSIONS
 from core.services.scan_service import suppress_fs_events
 from core.services.cache_service import schedule_reload, force_reload, update_card_cache
 from core.services.card_service import update_card_content, rename_folder_in_db, rename_folder_in_ui, resolve_ui_key
+from core.services.automation_service import auto_run_rules_on_card
 
 # === 工具函数 ===
 from core.utils.image import (
@@ -1008,6 +1009,23 @@ def api_upload_cards():
                     new_cards.append(card_data)
                     # 更新内存缓存 (这里只更新内存对象，不操作DB)
                     ctx.cache.add_card_update(card_data)
+                    
+                    # Auto Automation
+                    auto_res = auto_run_rules_on_card(card_data['id'])
+                    if auto_res and auto_res.get('result'):
+                        final_id = auto_res['result'].get('final_id')
+                        if final_id and final_id != card_data['id']:
+                            # ID 变了，更新返回给前端的数据
+                            card_data['id'] = final_id
+                            card_data['category'] = auto_res['result']['moved_to']
+                            # 更新 URL
+                            encoded_id = quote(final_id)
+                            ts = int(time.time())
+                            card_data['image_url'] = f"/cards_file/{encoded_id}?t={ts}"
+                            card_data['thumb_url'] = f"/api/thumbnail/{encoded_id}?t={ts}"
+                            # 标签也可能变了，这里暂不回填所有细节，主要是 ID 和 URL 不能错
+                    
+                    new_cards.append(card_data)
                 else:
                     # 无效文件处理
                     try: os.remove(save_path)
@@ -1221,6 +1239,19 @@ def api_import_from_url():
         }
         
         ctx.cache.add_card_update(new_card)
+        
+        # Auto Automation
+        auto_res = auto_run_rules_on_card(new_card['id'])
+        if auto_res and auto_res.get('result'):
+            final_id = auto_res['result'].get('final_id')
+            if final_id and final_id != new_card['id']:
+                new_card['id'] = final_id
+                new_card['category'] = auto_res['result']['moved_to']
+                # 更新 URL
+                encoded_id = quote(final_id)
+                ts = int(time.time())
+                new_card['image_url'] = f"/cards_file/{encoded_id}?t={ts}"
+                new_card['thumb_url'] = f"/api/thumbnail/{encoded_id}?t={ts}"
 
         return jsonify({"success": True, "new_card": new_card})
 

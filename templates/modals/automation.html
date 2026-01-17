@@ -1,0 +1,320 @@
+<!-- 自动化规则管理器 -->
+<div x-show="showAutomationModal" x-data="automationModal" x-cloak class="modal-overlay z-modal-std"
+    @click.self="closeModal()">
+    <div class="modal-container automation-container" style="width: 1100px; height: 85vh;">
+
+        <!-- 左侧：规则集列表 -->
+        <aside class="automation-sidebar custom-scrollbar">
+            <!-- 头部保持不变 -->
+            <div
+                class="p-3 border-b border-[var(--border-light)] flex justify-between items-center bg-[var(--bg-panel)]">
+                <span class="font-bold text-sm">规则集</span>
+                <div class="flex gap-1">
+                    <button @click="$refs.importInput.click()" class="btn-secondary px-2 py-1 text-xs"
+                        title="导入规则集">📥</button>
+                    <button @click="createNewRuleSet()" class="btn-secondary px-2 py-1 text-xs" title="新建">+ 新建</button>
+                </div>
+                <input type="file" x-ref="importInput" style="display:none" accept=".json"
+                    @change="handleImportRuleSet">
+            </div>
+
+            <div
+                class="px-3 py-2 border-b border-[var(--border-light)] bg-[var(--bg-sub)] text-xs flex justify-between items-center">
+                <span class="text-[var(--text-dim)]">全局规则:</span>
+                <template x-if="globalRulesetId">
+                    <span class="text-yellow-600 font-bold flex items-center gap-1">
+                        ⚡ <span x-text="ruleSets.find(r=>r.id===globalRulesetId)?.meta?.name || '未知'"></span>
+                    </span>
+                </template>
+                <template x-if="!globalRulesetId">
+                    <span class="text-[var(--text-dim)]">未设置 (禁用)</span>
+                </template>
+            </div>
+
+            <div class="flex-1 overflow-y-auto">
+                <template x-for="rs in ruleSets" :key="rs.id">
+                    <div class="ruleset-item" :class="activeRuleSet?.id === rs.id ? 'active' : ''"
+                        @click="selectRuleSet(rs.id)">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-sm truncate" x-text="rs.meta.name || '未命名规则集'"></span>
+
+                            <!-- 修复点：这里原来错误地使用了 activeRuleSet.id，改为 rs.id -->
+                            <!-- 同时添加 .stop 修饰符防止触发父级点击 -->
+                            <button @click.stop="toggleGlobalActive(rs.id)" 
+                                class="text-xs px-3 py-1 rounded border transition-all flex items-center gap-1"
+                                :class="globalRulesetId === rs.id 
+                                    ? 'bg-yellow-500 text-black border-yellow-600 font-bold shadow-md' 
+                                    : 'border-gray-500 text-gray-500 hover:border-yellow-500 hover:text-yellow-500'">
+                                <span x-text="globalRulesetId === rs.id ? '⚡ 已激活全局' : '⚡ 设为全局'"></span>
+                            </button>
+                        </div>
+                        <div class="ruleset-meta flex justify-between">
+                            <span x-text="'v' + (rs.meta.version || '1.0')"></span>
+                            <span x-text="rs.rule_count + ' rules'"></span>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="ruleSets.length===0" class="p-4 text-center text-xs text-[var(--text-dim)]">暂无规则集</div>
+            </div>
+        </aside>
+
+        <!-- 右侧：编辑器 -->
+        <!-- 使用 x-if 确保 activeRuleSet 为空时不渲染内部 DOM，彻底避免报错 -->
+        <template x-if="activeRuleSet">
+            <main class="automation-content">
+                <!-- 1. 顶部元数据栏 -->
+                <div class="auto-header flex-col items-stretch gap-2">
+                    
+                    <!-- 全局状态提示条 -->
+                    <div x-show="activeRuleSet?.id && globalRulesetId === activeRuleSet?.id" 
+                         class="bg-yellow-500/10 border border-yellow-500/30 rounded px-3 py-2 flex justify-between items-center transition-all duration-300">
+                        <div class="flex items-center gap-2 text-yellow-600 font-bold text-xs">
+                            <span class="text-lg">⚡</span>
+                            <span>当前状态：全局默认规则 (导入时自动运行)</span>
+                        </div>
+                        <button @click="toggleGlobalActive(activeRuleSet?.id)" class="text-xs underline hover:text-yellow-500 cursor-pointer">
+                            关闭全局状态
+                        </button>
+                    </div>
+    
+                    <div class="flex justify-between items-center w-full">
+                        <div class="flex gap-4 items-center flex-1">
+                            <div class="flex flex-col gap-1 flex-1">
+                                <div class="flex items-center gap-2">
+                                    <input type="text" x-model="editingMeta.name"
+                                        class="text-lg font-bold bg-transparent border-b border-transparent hover:border-[var(--border-light)] focus:border-[var(--accent-main)] outline-none transition-colors flex-1"
+                                        placeholder="规则集名称">
+                                    
+                                    <!-- 修复点：增加 ?.id 安全访问 -->
+                                    <button @click="toggleGlobalActive(activeRuleSet?.id)" 
+                                        class="text-[10px] px-2 py-1 rounded border transition-colors whitespace-nowrap flex items-center gap-1"
+                                        :class="(activeRuleSet?.id && globalRulesetId === activeRuleSet?.id)
+                                            ? 'bg-yellow-500 text-black border-yellow-600 font-bold shadow-sm' 
+                                            : 'border-[var(--border-light)] text-[var(--text-dim)] hover:border-yellow-500 hover:text-yellow-500'"
+                                        :title="(activeRuleSet?.id && globalRulesetId === activeRuleSet?.id) ? '点击关闭全局' : '设为全局自动规则'">
+                                        <span>⚡</span>
+                                        <span x-text="(activeRuleSet?.id && globalRulesetId === activeRuleSet?.id) ? '已激活' : '设为全局'"></span>
+                                    </button>
+                                </div>
+                                <input type="text" x-model="editingMeta.description"
+                                    class="text-xs text-[var(--text-dim)] bg-transparent border-b border-transparent hover:border-[var(--border-light)] focus:border-[var(--accent-main)] outline-none w-full"
+                                    placeholder="描述...">
+                            </div>
+                            <div class="flex flex-col gap-1 w-24">
+                                <input type="text" x-model="editingMeta.author" class="auto-input text-xs" placeholder="作者">
+                                <input type="text" x-model="editingMeta.version" class="auto-input text-xs" placeholder="版本">
+                            </div>
+                        </div>
+                        <div class="flex gap-2 ml-4">
+                            <button @click="exportCurrentRuleSet()" class="btn-secondary px-3" title="导出 JSON">
+                                📤
+                            </button>
+                            <button @click="deleteCurrentRuleSet()"
+                                class="btn-secondary text-red-400 hover:text-red-500 px-3">删除</button>
+                            <button @click="saveCurrentRuleSet()" class="btn-primary px-4 shadow-md">💾 保存</button>
+                        </div>
+                    </div>
+                </div>
+    
+                <!-- 2. 规则列表构建器 -->
+                <div class="auto-body custom-scrollbar">
+    
+                    <template x-for="(rule, rIdx) in editingRules" :key="rule.id">
+                        <div class="rule-card">
+                            <!-- 规则头 -->
+                            <div class="rule-header">
+                                <div class="flex items-center gap-2">
+                                    <span class="drag-handle cursor-grab">☰</span>
+                                    <input type="checkbox" x-model="rule.enabled" class="cursor-pointer" title="启用/禁用">
+                                    <input type="text" x-model="rule.name"
+                                        class="bg-transparent font-bold text-sm outline-none border-b border-transparent hover:border-gray-500 focus:border-blue-500 w-64"
+                                        placeholder="规则名称...">
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer select-none"
+                                        title="如果命中此规则，不再执行后续规则">
+                                        <input type="checkbox" x-model="rule.stop_on_match">
+                                        <span class="text-[var(--text-dim)]">命中即停止</span>
+                                    </label>
+                                    <button @click="moveRule(rIdx, -1)" class="btn-icon-sm">▲</button>
+                                    <button @click="moveRule(rIdx, 1)" class="btn-icon-sm">▼</button>
+                                    <button @click="deleteRule(rIdx)" class="btn-icon-sm delete">🗑️</button>
+                                </div>
+                            </div>
+    
+                            <!-- 规则体 -->
+                            <div class="rule-body" x-show="rule.enabled">
+    
+                                <!-- IF 区块 (Conditions) -->
+                                <div class="logic-block">
+                                    <div class="logic-label if flex flex-col items-end gap-1">
+                                        <span>IF</span>
+                                    </div>
+    
+                                    <div class="logic-content gap-3">
+                                        <!-- Rule Level Logic (Group Connector) -->
+                                        <div
+                                            class="flex items-center gap-2 mb-2 p-2 bg-[var(--bg-sub)] rounded border border-[var(--border-light)]">
+                                            <span class="text-xs font-bold text-[var(--text-dim)]">规则逻辑:</span>
+                                            <select x-model="rule.logic"
+                                                class="bg-[var(--bg-panel)] border border-[var(--border-light)] rounded px-2 py-1 text-xs text-[var(--text-main)] outline-none cursor-pointer hover:border-[var(--accent-main)]"
+                                                title="多个条件组之间的关系">
+                                                <option value="OR">满足任意一个条件组 (OR)</option>
+                                                <option value="AND">必须满足所有条件组 (AND)</option>
+                                            </select>
+                                            <span class="text-xs text-[var(--text-dim)]">时触发动作</span>
+                                        </div>
+                                        <!-- 遍历 Groups -->
+                                        <template x-for="(group, gIdx) in rule.groups" :key="group.id">
+                                            <div
+                                                class="relative border border-[var(--border-light)] rounded-lg p-2 bg-[var(--bg-sub)]">
+    
+                                                <!-- Group Header & Logic -->
+                                                <div
+                                                    class="flex justify-between items-center mb-2 pb-1 border-b border-[var(--border-light)] border-dashed">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-xs font-bold text-[var(--text-dim)]"
+                                                            x-text="'条件组 ' + (gIdx+1)"></span>
+                                                        <select x-model="group.logic"
+                                                            class="auto-select py-0 px-1 text-xs h-5">
+                                                            <option value="AND">且 (AND)</option>
+                                                            <option value="OR">或 (OR)</option>
+                                                        </select>
+                                                    </div>
+                                                    <button @click="removeGroup(rIdx, gIdx)"
+                                                        class="text-[10px] text-red-400 hover:text-red-500">删除组</button>
+                                                </div>
+    
+                                                <!-- Conditions List -->
+                                                <div class="flex flex-col gap-1">
+                                                    <template x-for="(cond, cIdx) in group.conditions" :key="cIdx">
+                                                        <div class="logic-row bg-[var(--bg-panel)]">
+                                                            <!-- 字段选择 -->
+                                                            <select x-model="cond.field" class="auto-select w-32">
+                                                                <optgroup label="基础信息">
+                                                                    <option value="char_name">角色名</option>
+                                                                    <option value="description">简介</option>
+                                                                    <option value="tags">标签 (List)</option>
+                                                                    <option value="creator">创作者</option>
+                                                                </optgroup>
+                                                                <optgroup label="高级扩展">
+                                                                    <option value="wi_name">世界书名称</option>
+                                                                    <option value="wi_content">世界书内容</option>
+                                                                    <option value="regex_name">正则脚本名称</option>
+                                                                    <option value="regex_content">正则脚本内容 (Regex)</option>
+                                                                    <option value="st_script_name">ST Helper 脚本名</option>
+                                                                    <option value="st_script_content">ST Helper 内容</option>
+                                                                </optgroup>
+                                                                <optgroup label="系统属性">
+                                                                    <option value="ui_summary">本地备注</option>
+                                                                    <option value="is_favorite">是否收藏</option>
+                                                                    <option value="token_count">Token 数</option>
+                                                                </optgroup>
+                                                            </select>
+    
+                                                            <!-- 操作符 -->
+                                                            <select x-model="cond.operator" class="auto-select w-28">
+                                                                <option value="contains">包含</option>
+                                                                <option value="not_contains">不包含</option>
+                                                                <option value="eq">等于</option>
+                                                                <option value="neq">不等于</option>
+                                                                <option value="regex">正则匹配</option>
+                                                                <option value="exists">有内容</option>
+                                                                <option value="not_exists">为空</option>
+                                                                <option value="gt">大于</option>
+                                                                <option value="lt">小于</option>
+                                                                <option value="is_true">是 (True)</option>
+                                                                <option value="is_false">否 (False)</option>
+                                                            </select>
+    
+                                                            <!-- 值 -->
+                                                            <div class="flex-1">
+                                                                <input
+                                                                    x-show="['exists','not_exists','is_true','is_false'].indexOf(cond.operator) === -1"
+                                                                    type="text" x-model="cond.value"
+                                                                    class="auto-input w-full">
+                                                            </div>
+    
+                                                            <button @click="removeConditionFromGroup(rIdx, gIdx, cIdx)"
+                                                                class="btn-icon-sm delete">✕</button>
+                                                        </div>
+                                                    </template>
+    
+                                                    <button @click="addConditionToGroup(rIdx, gIdx)"
+                                                        class="text-xs text-left text-blue-400 hover:text-blue-300 w-fit mt-1">
+                                                        + 添加条件
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </template>
+    
+                                        <button @click="addGroup(rIdx)"
+                                            class="w-full py-1 text-xs border border-dashed border-[var(--border-light)] text-[var(--text-dim)] hover:border-blue-400 hover:text-blue-400 rounded transition">
+                                            + 新增条件组 (New Group)
+                                        </button>
+                                    </div>
+                                </div>
+    
+                                <!-- THEN Actions -->
+                                <div class="logic-block">
+                                    <div class="logic-label then">THEN</div>
+                                    <div class="logic-content">
+                                        <template x-for="(action, aIdx) in rule.actions" :key="aIdx">
+                                            <div class="logic-row" style="border-color: rgba(16, 185, 129, 0.3);">
+                                                <select x-model="action.type"
+                                                    class="auto-select w-32 font-bold text-green-600">
+                                                    <option value="move_folder">📂 移动到...</option>
+                                                    <option value="add_tag">🏷️ 添加标签</option>
+                                                    <option value="remove_tag">🗑️ 移除标签</option>
+                                                    <option value="set_favorite">★ 设为收藏</option>
+                                                </select>
+    
+                                                <div class="flex-1">
+                                                    <template x-if="action.type === 'set_favorite'">
+                                                        <select x-model="action.value" class="auto-select w-full">
+                                                            <option value="true">是 (Favorite)</option>
+                                                            <option value="false">否 (Unfavorite)</option>
+                                                        </select>
+                                                    </template>
+    
+                                                    <template x-if="action.type !== 'set_favorite'">
+                                                        <input type="text" x-model="action.value" class="auto-input w-full"
+                                                            :placeholder="action.type==='move_folder' ? '文件夹路径 (e.g. Race/Elf)' : '标签名称'">
+                                                    </template>
+                                                </div>
+    
+                                                <button @click="removeAction(rIdx, aIdx)"
+                                                    class="btn-icon-sm delete">✕</button>
+                                            </div>
+                                        </template>
+                                        <button @click="addAction(rIdx)"
+                                            class="text-xs text-left text-green-500 hover:text-green-400 w-fit">+
+                                            添加执行动作</button>
+                                    </div>
+                                </div>
+    
+                            </div>
+                            <div x-show="!rule.enabled"
+                                class="bg-[var(--bg-sub)] p-2 text-center text-xs text-[var(--text-dim)]">
+                                (此规则已禁用)
+                            </div>
+                        </div>
+                    </template>
+    
+                    <button @click="addRule()"
+                        class="w-full py-3 border-2 border-dashed border-[var(--border-light)] rounded-lg text-[var(--text-dim)] hover:border-[var(--accent-main)] hover:text-[var(--accent-main)] transition font-bold">
+                        + 新增规则 (New Rule)
+                    </button>
+    
+                    <div class="h-10"></div> <!-- Bottom Spacer -->
+                </div>
+            </main>
+        </template>
+
+        <!-- 空状态 -->
+        <div x-show="!activeRuleSet" class="flex-1 flex flex-col items-center justify-center text-[var(--text-dim)]">
+            <div class="text-6xl mb-4 opacity-20">⚡</div>
+            <p>请从左侧选择一个规则集，或新建一个</p>
+        </div>
+    </div>
+</div>

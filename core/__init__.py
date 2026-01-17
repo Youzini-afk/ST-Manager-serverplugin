@@ -13,7 +13,7 @@ from core.data.db_session import init_database, close_connection, backfill_wi_me
 from core.services.scan_service import start_background_scanner
 
 # === API 蓝图 ===
-from core.api.v1 import cards, world_info, system, resources
+from core.api.v1 import cards, world_info, system, resources, automation
 from core.api import views
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ def create_app():
     app.register_blueprint(world_info.bp)  # 世界书管理
     app.register_blueprint(system.bp)      # 系统设置与操作
     app.register_blueprint(resources.bp)   # 静态资源服务 (图片/缩略图)
+    app.register_blueprint(automation.bp)  # 自动化任务管理
     
     # 2. 页面视图
     app.register_blueprint(views.bp)       # 前端页面入口

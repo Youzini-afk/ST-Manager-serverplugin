@@ -65,6 +65,8 @@ export function initState() {
         wiCurrentPage: 1,
         wiTotalItems: 0,
         wiTotalPages: 1,
+
+        availableRuleSets: [], // 规则集列表
         
         // 设置表单
         settingsForm: { 

@@ -5,6 +5,8 @@
     display: grid;
     gap: 1.5rem;
     grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width), 1fr));
+    position: relative;
+    z-index: 5;
 }
 
 /* 卡片内部的小标签 */
@@ -119,7 +121,6 @@
     min-height: 0;
     white-space: pre-wrap;
     word-break: break-all;
-    vertical-align: top;
     border: 1px solid var(--border-light);
     background: var(--bg-sub);
     display: block;

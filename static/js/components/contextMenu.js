@@ -7,6 +7,8 @@ import { deleteFolder } from '../api/system.js';
 
 import { toggleBundleMode } from '../api/card.js';
 
+import { executeRules } from '../api/automation.js';
+
 export default function contextMenu() {
     return {
         visible: false,
@@ -43,9 +45,47 @@ export default function contextMenu() {
             window.addEventListener('click', () => {
                 this.visible = false;
             });
+
+            window.addEventListener('show-context-menu', () => {
+                // 触发 header 加载规则集 (如果还没加载)
+                window.dispatchEvent(new CustomEvent('load-rulesets-for-menu'));
+            });
         },
 
         // === 菜单动作 ===
+
+        // 运行自动化
+        handleRunAuto(rulesetId) {
+            if (this.target === null || this.target === undefined) return;
+            
+            const folderName = this.target === '' ? '根目录' : this.target;
+            const msg = `确定对 "${folderName}" 下的所有卡片 (包括子文件夹) 执行此自动化规则吗？\n\n注意：这可能会移动大量文件。`;
+            
+            if (!confirm(msg)) return;
+            
+            // 关闭菜单
+            this.visible = false;
+            this.$store.global.isLoading = true;
+            
+            executeRules({
+                category: this.target, // 传路径给后端，后端解析所有 ID
+                recursive: true,
+                ruleset_id: rulesetId
+            }).then(res => {
+                this.$store.global.isLoading = false;
+                if (res.success) {
+                    alert(`✅ 执行完成！\n已处理: ${res.processed} 张卡片\n移动: ${res.summary.moves}\n变更: ${res.summary.tag_changes}`);
+                    // 刷新全部
+                    window.dispatchEvent(new CustomEvent('refresh-card-list'));
+                    window.dispatchEvent(new CustomEvent('refresh-folder-list'));
+                } else {
+                    alert("执行失败: " + res.msg);
+                }
+            }).catch(e => {
+                this.$store.global.isLoading = false;
+                alert("Error: " + e);
+            });
+        },
 
         // 重命名
         handleRename() {

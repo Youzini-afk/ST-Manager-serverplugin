@@ -24,3 +24,6 @@
 
 /* 9. 模态框 - 其他工具 */
 @import "modules/modal-tools.css";
+
+/* 10. 自动化规则管理器 */
+@import "modules/modal-automation.css";
