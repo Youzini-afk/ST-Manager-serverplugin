@@ -201,6 +201,8 @@ def check_discord_update(card_id, source_link, synced_title=None):
         token = token.get('token', '') or token.get('value', '') or ""
     
     token = str(token).strip()
+    if token.startswith("Bearer "):
+        token = token.replace("Bearer ", "", 1).strip()
 
     if not token or token == "" or token.startswith("{"):
         return {
@@ -210,14 +212,18 @@ def check_discord_update(card_id, source_link, synced_title=None):
         }
 
     try:
-        # 提取 ID: https://discord.com/channels/1134557553011998840/1442486545935237150/1461784642506981547
         match = re.search(r'discord\.com/channels/(\d+)/(\d+)(?:/(\d+))?', source_link)
         if not match:
             return {"success": False, "msg": "无效的 Discord 链接格式"}
             
         guild_id, channel_id, message_id = match.groups()
         
-        headers = {"Authorization": token if token.startswith("Bot ") else token}
+        # 构造请求头，模拟浏览器以减少 403 风险 (尤其是 User Token)
+        headers = {
+            "Authorization": token if token.startswith("Bot ") else token,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Content-Type": "application/json"
+        }
         
         # 1. 获取频道/帖子信息 (用于获取帖子名称)
         channel_name = ""
@@ -240,6 +246,8 @@ def check_discord_update(card_id, source_link, synced_title=None):
         resp = requests.get(api_url, headers=headers, params=params, timeout=10)
         if resp.status_code == 401:
             return {"success": False, "msg": "Discord Token 无效或已过期"}
+        if resp.status_code == 403:
+            return {"success": False, "msg": "Discord API 拒绝访问 (403): 请检查该 Token 是否已加入对应的服务器，或者是否有权限查看该频道。"}
         if resp.status_code != 200:
             return {"success": False, "msg": f"Discord API 请求失败: {resp.status_code}"}
             
