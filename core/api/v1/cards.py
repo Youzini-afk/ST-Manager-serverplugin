@@ -1015,9 +1015,30 @@ def api_import_from_url():
                 # --- 追加模式 (Auto Increment) ---
                 name_part, ext_part = os.path.splitext(final_filename)
                 counter = 1
-                while os.path.exists(target_save_path):
-                    target_save_path = os.path.join(target_dir, f"{name_part}_{counter}{ext_part}")
-                    counter += 1
+                while True:
+                    candidate_name = f"{name_part}_{counter}{ext_part}"
+                    candidate_path = os.path.join(target_dir, candidate_name)
+                    
+                    # 1. 检查主文件是否存在
+                    if os.path.exists(candidate_path):
+                        counter += 1
+                        continue
+                        
+                    # 2. 检查潜在的伴生文件冲突 (主要是 .json)
+                    # 避免生成的新文件名正好撞上已有的孤立 json 文件，导致数据错乱
+                    base_candidate = os.path.splitext(candidate_path)[0]
+                    if os.path.exists(base_candidate + ".json"):
+                        counter += 1
+                        continue
+                    
+                    # 如果是导入 json，也要检查是否有同名图片占位
+                    if ext_part.lower() == '.json' and os.path.exists(base_candidate + ".png"):
+                        counter += 1
+                        continue
+
+                    # 通过检查，确定路径
+                    target_save_path = candidate_path
+                    break
                 
             elif resolution == 'overwrite':
                 # 1. 读取旧文件的 Tags 并合并到 info 对象
@@ -2742,10 +2763,32 @@ def api_upload_commit():
             if action == 'rename':
                 name, ext = os.path.splitext(filename)
                 counter = 1
-                while os.path.exists(dst_path):
+                while True:
                     final_filename = f"{name}_{counter}{ext}"
                     dst_path = os.path.join(target_base_dir, final_filename)
-                    counter += 1
+                    
+                    # 1. 主文件冲突
+                    if os.path.exists(dst_path):
+                        counter += 1
+                        continue
+                    
+                    # 2. 伴生文件冲突检测
+                    base_dst = os.path.splitext(dst_path)[0]
+                    
+                    # 检查 .json (防止图片关联到错误的旧文本)
+                    if os.path.exists(base_dst + ".json"):
+                        counter += 1
+                        continue
+                        
+                    # 如果上传的是 json，检查 .png (防止文本关联到错误的旧图片)
+                    if ext.lower() == '.json':
+                        # 检查常见图片格式
+                        if os.path.exists(base_dst + ".png"):
+                            counter += 1
+                            continue
+                    
+                    # 通过检查
+                    break
             
             # 执行文件移动 (覆盖模式先删旧)
             if action == 'overwrite' and os.path.exists(dst_path):
