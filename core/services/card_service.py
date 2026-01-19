@@ -9,7 +9,7 @@ from PIL import Image
 from urllib.parse import quote
 
 # === 基础设施 ===
-from core.config import CARDS_FOLDER, DEFAULT_DB_PATH, THUMB_FOLDER
+from core.config import CARDS_FOLDER, DEFAULT_DB_PATH, THUMB_FOLDER, BASE_DIR, load_config
 from core.context import ctx
 from core.data.db_session import get_db
 from core.data.ui_store import load_ui_data, save_ui_data
@@ -23,13 +23,73 @@ from core.utils.image import (
     extract_card_info, write_card_metadata, resize_image_if_needed,
     clean_thumbnail_cache, find_sidecar_image, clean_sidecar_images
 )
-from core.utils.filesystem import save_json_atomic
+from core.utils.filesystem import save_json_atomic, sanitize_filename
 from core.utils.text import calculate_token_count
 from core.utils.hash import get_file_hash_and_size
 
 logger = logging.getLogger(__name__)
 
-def update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, new_upload_ext):
+# 内部辅助函数：获取或创建资源目录
+def _ensure_resource_folder_exists(card_id, hint_name):
+    """
+    确保卡片有资源目录。如果未设置，则基于 hint_name 自动创建并绑定。
+    返回: (folder_name, full_path, is_newly_created)
+    """
+    ui_data = load_ui_data()
+    ui_key = resolve_ui_key(card_id)
+    
+    current_val = ui_data.get(ui_key, {}).get('resource_folder')
+    
+    cfg = load_config()
+    res_root = os.path.join(BASE_DIR, cfg.get('resources_dir', 'data/assets/card_assets'))
+    
+    # 情况 A: 已配置，确保物理目录存在
+    if current_val:
+        # 处理绝对路径
+        if os.path.isabs(current_val):
+            full_path = current_val
+        else:
+            full_path = os.path.join(res_root, current_val)
+            
+        if not os.path.exists(full_path):
+            try: os.makedirs(full_path)
+            except: pass
+        return current_val, full_path, False
+
+    # 情况 B: 未配置，自动创建
+    safe_name = sanitize_filename(hint_name)
+    if not safe_name or safe_name == 'undefined':
+        safe_name = "untitled_card"
+        
+    new_folder_name = safe_name
+    full_path = os.path.join(res_root, new_folder_name)
+    
+    # 防重名
+    counter = 1
+    while os.path.exists(full_path):
+        new_folder_name = f"{safe_name}_{counter}"
+        full_path = os.path.join(res_root, new_folder_name)
+        counter += 1
+        
+    # 创建物理目录
+    os.makedirs(full_path)
+    
+    # 绑定数据 (UI Data)
+    if ui_key not in ui_data: ui_data[ui_key] = {}
+    ui_data[ui_key]['resource_folder'] = new_folder_name
+    save_ui_data(ui_data)
+    
+    # 绑定数据 (Cache) - 确保前端能即时感知
+    target_id = card_id
+    if ctx.cache and ui_key in ctx.cache.bundle_map:
+        target_id = ctx.cache.bundle_map[ui_key]
+    
+    if ctx.cache:
+        ctx.cache.update_card_data(target_id, {"resource_folder": new_folder_name})
+        
+    return new_folder_name, full_path, True
+
+def update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, new_upload_ext, image_policy='overwrite'):
     """
     核心卡片更新逻辑。
     处理文件上传、覆盖、版本新增、格式转换 (JSON<->PNG) 以及元数据合并。
@@ -40,6 +100,11 @@ def update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, new_
         is_bundle_update (bool): 是否为 Bundle 模式下的版本新增。
         keep_ui_data (dict): 前端传递的 UI 数据 (如 summary, link, tags)。
         new_upload_ext (str): 上传文件的扩展名 (.png/.json)。
+        image_policy (str): 图片处理策略
+            - 'overwrite': 直接覆盖 (默认)
+            - 'keep_image': 保留原图像素，只更新元数据
+            - 'archive_old': 覆盖前，将原图存入资源目录
+            - 'archive_new': 保留原图像素，将新上传的图存入资源目录
         
     Returns:
         dict: 更新结果，包含新的 ID、URL 和更新后的卡片对象。
@@ -91,15 +156,37 @@ def update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, new_
     # 应用前端传递的 Tags (优先级最高)
     if 'tags' in keep_ui_data:
         target_block['tags'] = keep_ui_data['tags']
-        
-    # ==============================================================================
-    # 文件写入操作
-    # ==============================================================================
     
-    target_save_path = original_full_path
-    final_rel_id = card_id
-    new_filename = os.path.basename(original_full_path)
+    # 提取 card_name 用于自动命名资源文件夹
+    # 优先用新数据的名字，其次旧数据的名字，最后文件名
+    hint_name_for_folder = ""
+    if 'name' in source_block: 
+        hint_name_for_folder = source_block['name']
+    elif 'name' in target_block: 
+        hint_name_for_folder = target_block['name']
+    else: 
+        hint_name_for_folder = os.path.splitext(new_filename)[0]
+    
+    # --- 资源归档辅助函数 ---
+    def _archive_file(src_path, label):
+        try:
+            # 自动获取或创建目录
+            res_name, res_full_path, is_new = _ensure_resource_folder_exists(card_id, hint_name_for_folder)
+            
+            # 如果是新创建的，需要同步到 keep_ui_data 以便稍后 save_ui_data 时不会被覆盖为空
+            if is_new:
+                keep_ui_data['resource_folder'] = res_name
 
+            ext = os.path.splitext(src_path)[1]
+            timestamp = int(time.time())
+            dst_name = f"{label}_{timestamp}{ext}"
+            shutil.copy2(src_path, os.path.join(res_full_path, dst_name))
+            
+            return res_name # 返回目录名供后续使用
+        except Exception as e:
+            logger.error(f"Archive failed: {e}")
+            return None
+    
     def save_card_atomic(save_path, image_obj, meta_data):
         """原子保存图片及元数据"""
         temp_save = save_path + ".tmp"
@@ -112,6 +199,27 @@ def update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, new_
         except Exception as e:
             if os.path.exists(temp_save): os.remove(temp_save)
             raise e
+        
+    # ==============================================================================
+    # 文件写入操作
+    # ==============================================================================
+    
+    target_save_path = original_full_path
+    final_rel_id = card_id
+    new_filename = os.path.basename(original_full_path)
+    
+    # 标记：是否发生了格式转换 (JSON -> PNG)
+    is_format_conversion = (not is_bundle_update) and (old_ext == '.json' and new_upload_ext == '.png')
+    
+    # 如果发生了格式转换，必须计算新的路径
+    if is_format_conversion:
+        base_name = os.path.splitext(os.path.basename(original_full_path))[0]
+        new_filename = base_name + ".png"
+        target_save_path = os.path.join(os.path.dirname(original_full_path), new_filename)
+        if '/' in card_id:
+            final_rel_id = f"{card_id.rsplit('/', 1)[0]}/{new_filename}"
+        else:
+            final_rel_id = new_filename
     
     # === 分支 A: Bundle 模式新增版本 ===
     if is_bundle_update:
@@ -135,35 +243,59 @@ def update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, new_
         
     # === 分支 B: 覆盖更新 ===
     else:
-        # 情况 B1: JSON -> PNG 格式升级
-        if old_ext == '.json' and new_upload_ext == '.png': 
-            base_name = os.path.splitext(os.path.basename(original_full_path))[0]
-            new_filename = base_name + ".png"
-            target_save_path = os.path.join(os.path.dirname(original_full_path), new_filename)
-            
-            if '/' in card_id:
-                final_rel_id = f"{card_id.rsplit('/', 1)[0]}/{new_filename}"
+        # 2.1 执行归档策略
+        if image_policy == 'archive_old' and os.path.exists(original_full_path):
+            if old_ext == '.json':
+                sidecar = find_sidecar_image(original_full_path)
+                if sidecar: _archive_file(sidecar, "archived_cover")
             else:
-                final_rel_id = new_filename
-                
-            img = Image.open(temp_path)
-            img = resize_image_if_needed(img)
+                _archive_file(original_full_path, "archived_cover")
+        
+        elif image_policy == 'archive_new':
+            if new_upload_ext == '.png':
+                _archive_file(temp_path, "archived_upload")
+
+        # 2.2 确定图片源 (Pixel Source)
+        # 默认使用新上传的图片
+        source_img_path = temp_path 
+        use_old_image = False
+
+        if image_policy == 'keep_image' or image_policy == 'archive_new':
+            # 用户想保留原图。
+            # 如果原文件是 PNG，可以直接用。
+            if old_ext == '.png' and os.path.exists(original_full_path):
+                source_img_path = original_full_path
+                use_old_image = True
+            # 如果原文件是 JSON，尝试找伴生图
+            elif old_ext == '.json':
+                sidecar = find_sidecar_image(original_full_path)
+                if sidecar:
+                    source_img_path = sidecar
+                    use_old_image = True
+                else:
+                    # 原来是 JSON 且没图，用户却选了 keep_image，这是矛盾的。
+                    # 回退到使用新上传的图 (temp_path)
+                    pass
+
+        # 2.3 执行写入
+        # 情况 A: 目标是 PNG (无论是升级还是原生覆盖)
+        if target_save_path.lower().endswith('.png'):
+            img = Image.open(source_img_path)
+            # 如果使用新图，可能需要 resize；旧图通常不动
+            if not use_old_image:
+                img = resize_image_if_needed(img)
+            
             save_card_atomic(target_save_path, img, final_info)
             
-            # 清理旧 JSON
-            clean_sidecar_images(original_full_path)
-            if os.path.exists(original_full_path):
-                os.remove(original_full_path)
-                
-        # 情况 B2: 常规更新
-        else: 
-            if new_upload_ext == '.png':
-                img = Image.open(temp_path)
-                img = resize_image_if_needed(img)
-                save_card_atomic(target_save_path, img, final_info)
-            else:
-                # JSON -> JSON
-                save_json_atomic(target_save_path, final_info)
+            # 如果是格式转换 (JSON -> PNG)，完成后删除旧 JSON 和伴生图
+            if is_format_conversion:
+                clean_sidecar_images(original_full_path)
+                if os.path.exists(original_full_path):
+                    os.remove(original_full_path)
+
+        # 情况 B: 目标是 JSON (仅当没升级格式且上传的也是 JSON 时)
+        else:
+            save_json_atomic(target_save_path, final_info)
                     
     # ==============================================================================
     # 数据同步
@@ -177,14 +309,18 @@ def update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, new_
         if ui_key != card_id: # 避免覆盖
             ui_data[ui_key] = ui_data[card_id]
             del ui_data[card_id]
-        
+    
     if ui_key not in ui_data: ui_data[ui_key] = {}
+    
+    # 如果 keep_ui_data 里有值（即前端传来 或者 上面 _archive_file 注入的），使用它
+    current_res_folder = keep_ui_data.get('resource_folder')
+    if current_res_folder:
+        ui_data[ui_key]['resource_folder'] = str(current_res_folder).strip()
     
     # UI Data 安全同步
     target_fields = [
         ('summary', 'ui_summary'), 
-        ('link', 'source_link'), 
-        ('resource_folder', 'resource_folder')
+        ('link', 'source_link')
     ]
     
     for db_field, input_field in target_fields:
@@ -283,6 +419,100 @@ def update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, new_
         "new_image_url": new_image_url,
         "updated_card": updated_card_obj
     }
+
+# 皮肤换封服务
+def swap_skin_to_cover(card_id, skin_filename, save_old_to_resource=False):
+    """
+    将资源目录下的皮肤设为当前卡片封面。
+    :param save_old_to_resource: 是否将被替换的封面保存回资源目录
+    """
+    suppress_fs_events(2.0)
+    
+    # 1. 定位卡片
+    card_rel_path = card_id.replace('/', os.sep)
+    card_full_path = os.path.join(CARDS_FOLDER, card_rel_path)
+    
+    if not os.path.exists(card_full_path):
+        return {"success": False, "msg": "Card not found"}
+        
+    # 2. 定位皮肤
+    ui_data = load_ui_data()
+    ui_key = resolve_ui_key(card_id)
+    res_folder_name = ui_data.get(ui_key, {}).get('resource_folder')
+    
+    if not res_folder_name:
+        return {"success": False, "msg": "Resource folder not set"}
+        
+    cfg = load_config()
+    res_root = os.path.join(BASE_DIR, cfg.get('resources_dir', 'data/assets/card_assets'))
+    
+    # 支持绝对路径配置
+    if os.path.isabs(res_folder_name):
+        skin_path = os.path.join(res_folder_name, skin_filename)
+        res_dir_path = res_folder_name
+    else:
+        skin_path = os.path.join(res_root, res_folder_name, skin_filename)
+        res_dir_path = os.path.join(res_root, res_folder_name)
+        
+    if not os.path.exists(skin_path):
+        return {"success": False, "msg": "Skin file not found"}
+
+    # 3. 读取当前卡片元数据 (因为皮肤图通常没有 Metadata，或者 Metadata 不对)
+    # 我们需要保留卡片当前的设定，只换图
+    current_info = extract_card_info(card_full_path)
+    if not current_info:
+        return {"success": False, "msg": "Failed to read current card metadata"}
+
+    # 4. 归档旧封面
+    if save_old_to_resource:
+        if not os.path.exists(res_dir_path): os.makedirs(res_dir_path)
+        timestamp = int(time.time())
+        old_ext = os.path.splitext(card_full_path)[1]
+        archive_name = f"prev_cover_{timestamp}{old_ext}"
+        shutil.copy2(card_full_path, os.path.join(res_dir_path, archive_name))
+
+    # 5. 执行替换
+    try:
+        # 打开皮肤图片
+        img = Image.open(skin_path)
+ 
+        # 先保存皮肤像素到目标，再写入 Meta
+        # 为了原子性写入临时文件
+        temp_target = card_full_path + ".tmp.png"
+        
+        # 构造 PngInfo
+        from PIL import PngImagePlugin
+        meta = PngImagePlugin.PngInfo()
+        # 序列化当前数据
+        import json, base64
+        # 使用工具函数确保 V3 标准化
+        from core.utils.data import normalize_card_v3, deterministic_sort
+        norm_data = normalize_card_v3(current_info)
+        sorted_data = deterministic_sort(norm_data)
+        chara_str = base64.b64encode(json.dumps(sorted_data).encode('utf-8')).decode('utf-8')
+        meta.add_text('chara', chara_str)
+        
+        img.save(temp_target, "PNG", pnginfo=meta)
+        
+        # 替换
+        os.replace(temp_target, card_full_path)
+        
+        # 更新数据库缓存 (Hash变了，但Meta没变，更新Hash和Size)
+        from core.services.cache_service import update_card_cache
+        from core.utils.hash import get_file_hash_and_size
+        
+        f_hash, f_size = get_file_hash_and_size(card_full_path)
+        update_card_cache(card_id, card_full_path, file_hash=f_hash, file_size=f_size)
+        
+        # 清理缩略图
+        from core.utils.image import clean_thumbnail_cache
+        from core.config import THUMB_FOLDER
+        clean_thumbnail_cache(card_id, THUMB_FOLDER)
+        
+        return {"success": True, "new_hash": f_hash}
+        
+    except Exception as e:
+        return {"success": False, "msg": str(e)}
 
 def resolve_ui_key(card_id):
     """

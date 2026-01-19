@@ -21,7 +21,7 @@ from core.consts import SIDECAR_EXTENSIONS
 # === 核心服务 ===
 from core.services.scan_service import suppress_fs_events
 from core.services.cache_service import schedule_reload, force_reload, update_card_cache
-from core.services.card_service import update_card_content, rename_folder_in_db, rename_folder_in_ui, resolve_ui_key
+from core.services.card_service import update_card_content, rename_folder_in_db, rename_folder_in_ui, resolve_ui_key, swap_skin_to_cover
 from core.services.automation_service import auto_run_rules_on_card
 
 # === 工具函数 ===
@@ -1498,6 +1498,7 @@ def api_update_card_from_url():
         url = data.get('url')
         is_bundle_update = data.get('is_bundle_update', False)
         keep_ui_data = data.get('keep_ui_data', {})
+        image_policy = data.get('image_policy', 'overwrite')
         
         if not url: return jsonify({"success": False, "msg": "URL不能为空"})
 
@@ -1521,8 +1522,18 @@ def api_update_card_from_url():
             os.remove(temp_path)
             return jsonify({"success": False, "msg": "无效的图片文件，无法获取角色数据"})
             
+        temp_ext = os.path.splitext(temp_path)[1].lower()
+        if not temp_ext: temp_ext = '.png'
+        
         # 调用通用逻辑
-        result = update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, '.png')
+        result = update_card_content(
+            card_id, 
+            temp_path, 
+            is_bundle_update, 
+            keep_ui_data, 
+            temp_ext,
+            image_policy
+        )
         
         if os.path.exists(temp_path): os.remove(temp_path)
         return jsonify(result)
@@ -2093,6 +2104,7 @@ def api_update_card_file():
         keep_ui_data = json.loads(request.form.get('keep_ui_data') or '{}')
         new_card_file = request.files.get('new_card')
         is_bundle_update = request.form.get('is_bundle_update') == 'true'
+        image_policy = request.form.get('image_policy', 'overwrite')
         
         if not new_card_file: return jsonify({"success": False, "msg": "未提供文件"})
 
@@ -2102,7 +2114,7 @@ def api_update_card_file():
         new_card_file.save(temp_path)
         
         # 调用通用逻辑
-        result = update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, new_upload_ext)
+        result = update_card_content(card_id, temp_path, is_bundle_update, keep_ui_data, new_upload_ext, image_policy)
         
         if os.path.exists(temp_path): os.remove(temp_path)
         return jsonify(result)
@@ -2113,6 +2125,20 @@ def api_update_card_file():
                 os.remove(temp_path) 
             except:
                 pass
+        return jsonify({"success": False, "msg": str(e)})
+
+# 皮肤设为封面路由
+@bp.route('/api/set_skin_cover', methods=['POST'])
+def api_set_skin_cover():
+    try:
+        data = request.json
+        card_id = data.get('card_id')
+        skin_filename = data.get('skin_filename')
+        save_old = data.get('save_old', False)
+        
+        result = swap_skin_to_cover(card_id, skin_filename, save_old)
+        return jsonify(result)
+    except Exception as e:
         return jsonify({"success": False, "msg": str(e)})
 
 @bp.route('/api/create_folder', methods=['POST'])

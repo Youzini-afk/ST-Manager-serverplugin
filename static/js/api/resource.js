@@ -64,3 +64,14 @@ export async function uploadNoteImage(formData) {
     });
     return res.json();
 }
+
+// 将皮肤设为封面
+export async function setSkinAsCover(payload) {
+    // payload: { card_id, skin_filename, save_old }
+    const res = await fetch('/api/set_skin_cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    return res.json();
+}

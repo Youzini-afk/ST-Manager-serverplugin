@@ -22,7 +22,8 @@ import {
 } from '../api/system.js';
 
 import { 
-    listSkins, 
+    listSkins,
+    setSkinAsCover,
     setResourceFolder as apiSetResourceFolder, 
     openResourceFolder as apiOpenResourceFolder, 
     createResourceFolder as apiCreateResourceFolder 
@@ -44,6 +45,8 @@ export default function detailModal() {
         tab: 'basic', 
         lastTab: 'basic',
         showFirstPreview: false,
+        updateImagePolicy: 'overwrite', // 默认策略
+        saveOldCoverOnSwap: false,      // 皮肤换封时是否保留旧图
         
         // 编辑器状态 (V3 规范扁平化数据)
         editingData: {
@@ -120,6 +123,8 @@ export default function detailModal() {
                     this.zoomLevel = 100;
                     this.isCardFlipped = false;
                     this.skinImages = [];
+                    this.updateImagePolicy = 'overwrite';
+                    this.saveOldCoverOnSwap = false;
                 }
             });
         },
@@ -456,11 +461,12 @@ export default function detailModal() {
             }
 
             let isBundleUpdate = false;
+            let finalPolicy = this.updateImagePolicy; // 获取当前选中的策略
             if (this.activeCard.is_bundle) {
                 const choice = confirm(`检测到这是聚合角色包。\n\n[确定] = 添加为新版本 (推荐)\n[取消] = 覆盖当前选中的版本文件`);
                 isBundleUpdate = choice;
             } else {
-                if (!confirm(`确定要用新文件覆盖 "${this.activeCard.char_name}" 吗？`)) {
+                if (!confirm(`确定要更新角色卡 "${this.activeCard.char_name}" 吗？\n当前策略: ${this.getPolicyName(finalPolicy)}`)) {
                     e.target.value = '';
                     return;
                 }
@@ -470,6 +476,7 @@ export default function detailModal() {
             formData.append('new_card', file);
             formData.append('card_id', this.editingData.id);
             formData.append('is_bundle_update', isBundleUpdate);
+            formData.append('image_policy', finalPolicy);
             formData.append('keep_ui_data', JSON.stringify({
                 ui_summary: this.editingData.ui_summary,
                 source_link: this.editingData.source_link,
@@ -480,16 +487,71 @@ export default function detailModal() {
             this.performUpdate(formData, '/api/update_card_file', e.target);
         },
 
+        // 辅助显示策略名称
+        getPolicyName(p) {
+            const map = {
+                'overwrite': '直接覆盖',
+                'keep_image': '保留原图',
+                'archive_old': '归档旧图',
+                'archive_new': '新图存为皮肤'
+            };
+            return map[p] || p;
+        },
+
+        // 皮肤设为封面逻辑
+        setSkinAsCover(skinFilename) {
+            if (!confirm("确定将此皮肤设为封面吗？" + (this.saveOldCoverOnSwap ? "\n(当前封面将保存到资源目录)" : "\n(当前封面将被覆盖)"))) return;
+
+            this.isSaving = true;
+            setSkinAsCover({
+                card_id: this.activeCard.id,
+                skin_filename: skinFilename,
+                save_old: this.saveOldCoverOnSwap
+            }).then(res => {
+                this.isSaving = false;
+                if (res.success) {
+                    this.$store.global.showToast("✅ 封面已切换");
+                    
+                    // 强制刷新图片显示
+                    const ts = new Date().getTime();
+                    this.activeCard.image_url += (this.activeCard.image_url.includes('?') ? '&' : '?') + `t=${ts}`;
+                    
+                    // 刷新列表
+                    window.dispatchEvent(new CustomEvent('refresh-card-list'));
+                    
+                    // 刷新皮肤列表 (如果保存了旧图，皮肤列表会增加)
+                    if (this.saveOldCoverOnSwap) {
+                        this.fetchSkins(this.editingData.resource_folder);
+                    }
+                    
+                    // 退出皮肤预览模式，显示主图
+                    this.currentSkinIndex = -1;
+                } else {
+                    alert("操作失败: " + res.msg);
+                }
+            }).catch(e => {
+                this.isSaving = false;
+                alert(e);
+            });
+        },
+
         triggerUrlUpdate() {
-            const url = prompt("请输入新的角色卡图片链接 (PNG/WEBP):\n注意：这仅更新图片和数据，不会更改'来源链接'字段。");
+            const url = prompt("请输入新的角色卡图片链接 (PNG/WEBP):");
             if (!url) return;
 
             let isBundleUpdate = false;
+            let finalPolicy = this.updateImagePolicy;
             if (this.activeCard.is_bundle) {
-                if (confirm(`确认从 URL 更新? (聚合包模式：将自动添加为新版本)`)) isBundleUpdate = true;
-                else return;
+                if (confirm(`检测到这是聚合角色包。\n\n[确定] = 添加为新版本 (强制覆盖策略)\n[取消] = 更新当前版本 (应用选中策略)`)) {
+                    isBundleUpdate = true;
+                    // 如果是新增版本，逻辑上必须是覆盖写入新文件
+                    finalPolicy = 'overwrite';
+                }
             } else {
-                if (!confirm(`确定从 URL 覆盖当前卡片吗？`)) return;
+                const policyName = this.getPolicyName(finalPolicy);
+                if (!confirm(`确定从 URL 更新当前卡片吗？\n\n当前策略: 【${policyName}】`)) {
+                    return;
+                }
             }
 
             this.isSaving = true;
@@ -497,6 +559,7 @@ export default function detailModal() {
                 card_id: this.editingData.id,
                 url: url,
                 is_bundle_update: isBundleUpdate,
+                image_policy: finalPolicy,
                 keep_ui_data: {
                     ui_summary: this.editingData.ui_summary,
                     source_link: this.editingData.source_link,
@@ -539,6 +602,11 @@ export default function detailModal() {
                     
                     const idToRefresh = res.new_id || updatedCard.id;
                     this.refreshActiveCardDetail(idToRefresh);
+
+                    // 如果存在资源目录（可能是刚自动创建的），立即重新获取列表以显示归档的图片
+                    if (updatedCard.resource_folder) {
+                        this.fetchSkins(updatedCard.resource_folder);
+                    }
                 } else {
                     window.dispatchEvent(new CustomEvent('refresh-card-list'));
                 }

@@ -225,7 +225,8 @@
                 <nav class="detail-tabs">
                     <button class="detail-tab" :class="tab==='basic' ? 'active' : ''" @click="tab='basic'">📝
                         基础</button>
-                    <button x-show="hasPersonaFields" class="detail-tab" :class="tab==='persona' ? 'active' : ''" @click="tab='persona'">🧠
+                    <button x-show="hasPersonaFields" class="detail-tab" :class="tab==='persona' ? 'active' : ''"
+                        @click="tab='persona'">🧠
                         设定</button>
                     <button class="detail-tab" :class="tab==='dialog' ? 'active' : ''" @click="tab='dialog'">💬
                         对话</button>
@@ -269,16 +270,19 @@
 
                     <section x-show="tab==='persona'" x-transition.opacity class="detail-section detail-section-fill">
                         <div class="detail-tab-scroll custom-scrollbar">
-                            
+
                             <!-- 1. 人格设定 (Personality) -->
                             <template x-if="editingData.personality">
-                                <div class="detail-card" style="background: rgba(0,0,0,0.15); border-color: transparent;">
+                                <div class="detail-card"
+                                    style="background: rgba(0,0,0,0.15); border-color: transparent;">
                                     <div class="detail-card-head py-1 min-h-[2rem]">
-                                        <div class="detail-card-title text-xs text-gray-500 uppercase tracking-wider">人格设定 (Personality)</div>
-                                        <button class="expand-btn scale-90 opacity-50 hover:opacity-100 transition-opacity" 
+                                        <div class="detail-card-title text-xs text-gray-500 uppercase tracking-wider">
+                                            人格设定 (Personality)</div>
+                                        <button
+                                            class="expand-btn scale-90 opacity-50 hover:opacity-100 transition-opacity"
                                             @click="openLargeEditor('personality','人格设定')">⤢</button>
                                     </div>
-                                    <textarea readonly x-model="editingData.personality" 
+                                    <textarea readonly x-model="editingData.personality"
                                         class="form-textarea text-xs bg-transparent text-[var(--text-dim)] focus:outline-none custom-scrollbar"
                                         style="height: 8rem; resize:none; border:none; box-shadow: none;"></textarea>
                                 </div>
@@ -286,13 +290,16 @@
 
                             <!-- 2. 场景设定 (Scenario) -->
                             <template x-if="editingData.scenario">
-                                <div class="detail-card" style="background: rgba(0,0,0,0.15); border-color: transparent;">
+                                <div class="detail-card"
+                                    style="background: rgba(0,0,0,0.15); border-color: transparent;">
                                     <div class="detail-card-head py-1 min-h-[2rem]">
-                                        <div class="detail-card-title text-xs text-gray-500 uppercase tracking-wider">场景设定 (Scenario)</div>
-                                        <button class="expand-btn scale-90 opacity-50 hover:opacity-100 transition-opacity" 
+                                        <div class="detail-card-title text-xs text-gray-500 uppercase tracking-wider">
+                                            场景设定 (Scenario)</div>
+                                        <button
+                                            class="expand-btn scale-90 opacity-50 hover:opacity-100 transition-opacity"
                                             @click="openLargeEditor('scenario','场景设定')">⤢</button>
                                     </div>
-                                    <textarea readonly x-model="editingData.scenario" 
+                                    <textarea readonly x-model="editingData.scenario"
                                         class="form-textarea text-xs bg-transparent text-[var(--text-dim)] focus:outline-none custom-scrollbar"
                                         style="height: 6rem; resize:none; border:none; box-shadow: none;"></textarea>
                                 </div>
@@ -300,13 +307,16 @@
 
                             <!-- 3. 作者注释 (Creator Notes) -->
                             <template x-if="editingData.creator_notes">
-                                <div class="detail-card" style="background: rgba(0,0,0,0.15); border-color: transparent;">
+                                <div class="detail-card"
+                                    style="background: rgba(0,0,0,0.15); border-color: transparent;">
                                     <div class="detail-card-head py-1 min-h-[2rem]">
-                                        <div class="detail-card-title text-xs text-gray-500 uppercase tracking-wider">作者注释 (Creator Notes)</div>
-                                        <button class="expand-btn scale-90 opacity-50 hover:opacity-100 transition-opacity" 
+                                        <div class="detail-card-title text-xs text-gray-500 uppercase tracking-wider">
+                                            作者注释 (Creator Notes)</div>
+                                        <button
+                                            class="expand-btn scale-90 opacity-50 hover:opacity-100 transition-opacity"
                                             @click="openLargeEditor('creator_notes','作者注释')">⤢</button>
                                     </div>
-                                    <textarea readonly x-model="editingData.creator_notes" 
+                                    <textarea readonly x-model="editingData.creator_notes"
                                         class="form-textarea text-xs bg-transparent text-[var(--text-dim)] focus:outline-none custom-scrollbar"
                                         style="height: 6rem; resize:none; border:none; box-shadow: none;"></textarea>
                                 </div>
@@ -314,13 +324,17 @@
 
                             <!-- 4. 系统提示词 (System Prompt) -->
                             <template x-if="editingData.system_prompt">
-                                <div class="detail-card" style="background: rgba(40, 20, 60, 0.15); border-color: transparent;">
+                                <div class="detail-card"
+                                    style="background: rgba(40, 20, 60, 0.15); border-color: transparent;">
                                     <div class="detail-card-head py-1 min-h-[2rem]">
-                                        <div class="detail-card-title text-xs text-purple-400/70 uppercase tracking-wider">系统提示词 (System Prompt)</div>
-                                        <button class="expand-btn scale-90 opacity-50 hover:opacity-100 transition-opacity" 
+                                        <div
+                                            class="detail-card-title text-xs text-purple-400/70 uppercase tracking-wider">
+                                            系统提示词 (System Prompt)</div>
+                                        <button
+                                            class="expand-btn scale-90 opacity-50 hover:opacity-100 transition-opacity"
                                             @click="openLargeEditor('system_prompt','系统提示词')">⤢</button>
                                     </div>
-                                    <textarea readonly x-model="editingData.system_prompt" 
+                                    <textarea readonly x-model="editingData.system_prompt"
                                         class="form-textarea text-xs font-mono bg-transparent text-[var(--text-dim)] focus:outline-none custom-scrollbar"
                                         style="height: 6rem; resize:none; border:none; box-shadow: none;"></textarea>
                                 </div>
@@ -328,13 +342,17 @@
 
                             <!-- 5. 历史指令 (Post History) -->
                             <template x-if="editingData.post_history_instructions">
-                                <div class="detail-card" style="background: rgba(40, 20, 60, 0.15); border-color: transparent;">
+                                <div class="detail-card"
+                                    style="background: rgba(40, 20, 60, 0.15); border-color: transparent;">
                                     <div class="detail-card-head py-1 min-h-[2rem]">
-                                        <div class="detail-card-title text-xs text-purple-400/70 uppercase tracking-wider">历史指令 (Post History)</div>
-                                        <button class="expand-btn scale-90 opacity-50 hover:opacity-100 transition-opacity" 
+                                        <div
+                                            class="detail-card-title text-xs text-purple-400/70 uppercase tracking-wider">
+                                            历史指令 (Post History)</div>
+                                        <button
+                                            class="expand-btn scale-90 opacity-50 hover:opacity-100 transition-opacity"
                                             @click="openLargeEditor('post_history_instructions','历史指令')">⤢</button>
                                     </div>
-                                    <textarea readonly x-model="editingData.post_history_instructions" 
+                                    <textarea readonly x-model="editingData.post_history_instructions"
                                         class="form-textarea text-xs font-mono bg-transparent text-[var(--text-dim)] focus:outline-none custom-scrollbar"
                                         style="height: 6rem; resize:none; border:none; box-shadow: none;"></textarea>
                                 </div>
@@ -731,13 +749,59 @@
                                 <div class="detail-card-title">更新角色卡 (Update)</div>
                             </div>
 
+                            <!-- 策略选择 -->
+                            <div class="px-3 pt-2 pb-3 border-b border-[var(--border-light)] bg-[var(--bg-sub)]/50">
+                                <div class="text-xs font-bold mb-2 text-[var(--text-dim)] flex items-center gap-2">
+                                    <span>🛠️ 图片处理策略</span>
+                                    <span class="text-[10px] font-normal opacity-60">(适用于文件上传和 URL 更新)</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <label
+                                        class="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-[var(--bg-panel)] transition-colors border border-transparent hover:border-[var(--border-light)]">
+                                        <input type="radio" name="update_policy" value="overwrite"
+                                            x-model="updateImagePolicy" class="accent-[var(--accent-main)]">
+                                        <div class="flex flex-col">
+                                            <span class="text-xs font-bold text-[var(--text-main)]">🔄 直接覆盖</span>
+                                            <span class="text-[10px] text-[var(--text-dim)]">使用新图，不留旧图</span>
+                                        </div>
+                                    </label>
+                                    <label
+                                        class="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-[var(--bg-panel)] transition-colors border border-transparent hover:border-[var(--border-light)]">
+                                        <input type="radio" name="update_policy" value="keep_image"
+                                            x-model="updateImagePolicy" class="accent-[var(--accent-main)]">
+                                        <div class="flex flex-col">
+                                            <span class="text-xs font-bold text-[var(--text-main)]">🖼️ 保留原图</span>
+                                            <span class="text-[10px] text-[var(--text-dim)]">只更新数据，忽略新图</span>
+                                        </div>
+                                    </label>
+                                    <label
+                                        class="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-[var(--bg-panel)] transition-colors border border-transparent hover:border-[var(--border-light)]">
+                                        <input type="radio" name="update_policy" value="archive_old"
+                                            x-model="updateImagePolicy" class="accent-[var(--accent-main)]">
+                                        <div class="flex flex-col">
+                                            <span class="text-xs font-bold text-[var(--text-main)]">📂 归档旧图</span>
+                                            <span class="text-[10px] text-[var(--text-dim)]">旧图存入资源目录</span>
+                                        </div>
+                                    </label>
+                                    <label
+                                        class="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-[var(--bg-panel)] transition-colors border border-transparent hover:border-[var(--border-light)]">
+                                        <input type="radio" name="update_policy" value="archive_new"
+                                            x-model="updateImagePolicy" class="accent-[var(--accent-main)]">
+                                        <div class="flex flex-col">
+                                            <span class="text-xs font-bold text-[var(--text-main)]">✨ 新图归档</span>
+                                            <span class="text-[10px] text-[var(--text-dim)]">新图存为皮肤，保留原图</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
                             <div class="detail-manage-grid">
                                 <div class="detail-manage-box">
                                     <div class="detail-manage-label">文件覆盖</div>
                                     <div class="detail-muted">上传 PNG/JSON 覆盖或添加新版本（Bundle）</div>
                                     <div class="detail-manage-actions">
                                         <button @click="triggerCardUpdate()" class="btn-update-card btn-update-file">📂
-                                            文件覆盖</button>
+                                            选择文件..</button>
                                         <input type="file" x-ref="cardUpdateInput" @change="handleCardUpdate"
                                             accept=".png,.json" style="display:none;">
                                     </div>
@@ -749,6 +813,51 @@
                                     <div class="detail-manage-actions">
                                         <button @click="triggerUrlUpdate()" class="btn-update-card btn-update-url">🌐
                                             URL 更新</button>
+                                    </div>
+                                </div>
+
+                                <div class="detail-manage-box" style="border-color: var(--accent-light);"
+                                    x-show="currentSkinIndex >= 0">
+                                    <div class="detail-manage-label flex items-center gap-2">
+                                        <span>🖼️ 皮肤换封</span>
+                                        <span
+                                            class="text-[10px] bg-[var(--accent-main)] text-white px-1.5 rounded">Selected</span>
+                                    </div>
+                                    <div class="detail-muted truncate" :title="skinImages[currentSkinIndex]">
+                                        当前选中: <span class="font-mono text-[var(--text-main)]"
+                                            x-text="skinImages[currentSkinIndex]"></span>
+                                    </div>
+
+                                    <div class="detail-manage-actions flex-col items-stretch gap-2">
+                                        <!-- 选项：保留原图 -->
+                                        <label
+                                            class="flex items-center gap-2 cursor-pointer select-none p-1 rounded hover:bg-[var(--bg-sub)] transition-colors border border-transparent hover:border-[var(--border-light)]">
+                                            <input type="checkbox" x-model="saveOldCoverOnSwap"
+                                                class="accent-[var(--accent-main)] w-3.5 h-3.5">
+                                            <span class="text-xs text-[var(--text-dim)]">将当前封面归档至资源目录</span>
+                                        </label>
+
+                                        <!-- 按钮 -->
+                                        <button @click="setSkinAsCover(skinImages[currentSkinIndex])"
+                                            class="btn-secondary w-full justify-center font-bold text-[var(--accent-main)] border-[var(--accent-main)] hover:bg-[var(--accent-main)] hover:text-white transition-all shadow-sm">
+                                            ✨ 设为封面
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 状态 B: 当未选中皮肤 (Main 或 Bundle Version) 时显示占位 -->
+                                <div class="detail-manage-box opacity-60 grayscale" style="border-style: dashed;"
+                                    x-show="currentSkinIndex === -1">
+                                    <div class="detail-manage-label text-[var(--text-dim)]">皮肤换封</div>
+                                    <div class="detail-muted">
+                                        <span x-show="skinImages.length > 0">请先在左侧列表选择一张皮肤</span>
+                                        <span x-show="skinImages.length === 0">当前无可用皮肤资源</span>
+                                    </div>
+                                    <div class="detail-manage-actions">
+                                        <button disabled
+                                            class="btn-secondary w-full justify-center cursor-not-allowed opacity-50 text-xs">
+                                            🚫 需先选图
+                                        </button>
                                     </div>
                                 </div>
 
