@@ -215,15 +215,18 @@ export default function sidebar() {
             
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('application/x-st-folder', folder.path);
+
+            const el = e.currentTarget;
             
             // 样式
-            e.target.classList.add('drag-source');
+            el.classList.add('drag-source');
             
             const handleDragEnd = () => {
                 window.dispatchEvent(new CustomEvent('global-drag-end'));
-                e.currentTarget.removeEventListener('dragend', handleDragEnd);
+                el.classList.remove('drag-source');
+                el.removeEventListener('dragend', handleDragEnd);
             };
-            e.currentTarget.addEventListener('dragend', handleDragEnd);
+            el.addEventListener('dragend', handleDragEnd);
         },
 
         folderDragOver(e, folder) {
