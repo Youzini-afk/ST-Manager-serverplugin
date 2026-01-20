@@ -80,6 +80,12 @@
                             ℹ️
                         </button>
 
+                        <!-- 移动端帮助按钮 -->
+                        <button x-show="!isCardFlipped" @click.stop="showHelpModal=true"
+                            class="btn-secondary detail-icon-btn" title="帮助">
+                            ?
+                        </button>
+
                         <button x-show="!isCardFlipped" @click.stop="triggerImageUpload()"
                             class="btn-secondary detail-icon-btn" title="更换图片">
                             📷
@@ -174,6 +180,9 @@
                 <header class="detail-topbar" x-show="$store.global.deviceType !== 'mobile'">
                     <!-- 桌面端：关闭按钮 -->
                     <button @click="showDetail=false" class="btn-secondary detail-close-floating" title="关闭">✕</button>
+                    <!-- 桌面端：帮助按钮 (位于关闭按钮左侧) -->
+                    <button @click="showHelpModal=true" class="btn-secondary detail-help-floating"
+                        title="查看帮助指南">?</button>
 
                     <div class="detail-title-block">
                         <div class="detail-title-row">
@@ -1106,6 +1115,239 @@
                     <button @click="setResourceFolder(); showSetResourceFolderModal = false;"
                         class="btn-primary flex-1 rounded">确定 (API保存)</button>
                 </div>
+            </div>
+        </div>
+    </div>
+    <!-- ================================================= -->
+    <!-- 字段说明帮助模态框 (Help Modal) -->
+    <!-- ================================================= -->
+    <div x-show="showHelpModal" x-cloak x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+        x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100"
+        x-transition:leave-end="opacity-0 scale-95"
+        class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 md:p-8"
+        @click.self="showHelpModal = false">
+
+        <div
+            class="bg-[var(--bg-panel)] border border-[var(--border-light)] rounded-xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
+
+            <!-- Header -->
+            <div
+                class="px-6 py-4 border-b border-[var(--border-light)] bg-[var(--bg-sub)] flex justify-between items-center flex-shrink-0">
+                <h3 class="font-bold text-lg text-[var(--text-main)] flex items-center gap-2">
+                    <span>📚</span> 角色卡字段说明指南
+                </h3>
+                <button @click="showHelpModal = false" class="text-gray-500 hover:text-red-400 px-2 text-xl">✕</button>
+            </div>
+
+            <!-- Content -->
+            <div class="p-6 overflow-y-auto custom-scrollbar text-sm text-[var(--text-main)] space-y-8">
+
+                <!-- 1. 核心设定 -->
+                <div>
+                    <h4 class="font-bold text-blue-400 mb-3 text-base border-b border-blue-500/30 pb-1 inline-block">1.
+                        核心设定 (Core Identity)</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)]">
+                            <span class="font-bold text-[var(--accent-light)] block mb-1">简介 (Description)</span>
+                            <p class="text-[var(--text-dim)] text-xs leading-relaxed">
+                                角色的核心定义。包括外貌、性格、身世背景等。这是 AI 理解“我是谁”的最主要来源。
+                                <br><span class="opacity-60">*建议：使用精炼的陈述句或属性列表。</span>
+                            </p>
+                        </div>
+                        <div class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)]">
+                            <span class="font-bold text-[var(--accent-light)] block mb-1">开场白 (First Message)</span>
+                            <p class="text-[var(--text-dim)] text-xs leading-relaxed">
+                                对话开始时 AI 发送的第一条消息。它奠定了整个对话的语调、场景和格式（如是否使用动作描写）。
+                            </p>
+                        </div>
+                        <div class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)]">
+                            <span class="font-bold text-[var(--accent-light)] block mb-1">对话示例 (Mes Examples)</span>
+                            <p class="text-[var(--text-dim)] text-xs leading-relaxed">
+                                <span class="bg-gray-700 text-white px-1 rounded text-[10px]">&lt;START&gt;</span>
+                                标签分隔的对话样例。
+                                非常重要！它教 AI 如何说话（口癖、语气、动作描写的格式）。
+                                <br><span class="opacity-60">*注意：这里的设定仅作参考，不会直接出现在当前对话中。</span>
+                            </p>
+                        </div>
+                        <div class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)]">
+                            <span class="font-bold text-[var(--accent-light)] block mb-1">备用开场白 (Alt Greetings)</span>
+                            <p class="text-[var(--text-dim)] text-xs leading-relaxed">
+                                可以在开始新对话时随机替换默认开场白，用于提供不同的剧情切入点。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 深度扩展 -->
+                <div>
+                    <h4
+                        class="font-bold text-purple-400 mb-3 text-base border-b border-purple-500/30 pb-1 inline-block">
+                        2. 深度扩展 (Extended Persona)</h4>
+                    <p class="text-xs text-gray-500 mb-3">这些字段在 V2/V3 规范中用于细分设定，SillyTavern 会根据配置将它们组合发送给 AI。</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)]">
+                            <span class="font-bold text-purple-300 block mb-1">人格设定 (Personality)</span>
+                            <p class="text-[var(--text-dim)] text-xs">
+                                专门描述性格特征（如：傲娇、冷酷、温柔）。有时会与“简介”合并发送。
+                            </p>
+                        </div>
+                        <div class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)]">
+                            <span class="font-bold text-purple-300 block mb-1">场景设定 (Scenario)</span>
+                            <p class="text-[var(--text-dim)] text-xs">
+                                当前对话发生的背景环境。例如：“在暴风雨的夜晚”、“在学校医务室”。
+                            </p>
+                        </div>
+                        <div class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)]">
+                            <span class="font-bold text-purple-300 block mb-1">作者注释 (Creator Notes)</span>
+                            <p class="text-[var(--text-dim)] text-xs">
+                                作者留给用户的说明（如：包含什么XP、如何使用）。通常不会发送给 AI，除非在 ST 中特殊配置。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 系统指令 -->
+                <div>
+                    <h4 class="font-bold text-red-400 mb-3 text-base border-b border-red-500/30 pb-1 inline-block">3.
+                        系统指令 (System & Instructions)</h4>
+                    <div class="bg-[var(--bg-sub)] rounded border border-[var(--border-light)] p-3 space-y-3">
+                        <div class="flex gap-3">
+                            <div class="min-w-[120px] font-bold text-red-300 text-sm">系统提示词<br><span
+                                    class="text-[10px] opacity-60">System Prompt</span></div>
+                            <div class="text-xs text-[var(--text-dim)]">
+                                强制覆盖全局的 Main Prompt。用于从底层改变 AI 的行为逻辑（如：“你是一个文字冒险游戏引擎”）。
+                                <br><span class="text-yellow-500">*警告：除非你知道自己在做什么，否则留空。</span>
+                            </div>
+                        </div>
+                        <hr class="border-[var(--border-light)] border-dashed">
+                        <div class="flex gap-3">
+                            <div class="min-w-[120px] font-bold text-red-300 text-sm">历史指令<br><span
+                                    class="text-[10px] opacity-60">Post-History</span></div>
+                            <div class="text-xs text-[var(--text-dim)]">
+                                被追加在聊天记录的末尾发送。由于位置靠后，权重极高。
+                                <br>常用于：“强制打破复读”、“强制保持某种语言风格”或“当前剧情的强制引导”。
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. 管理器特有功能 -->
+                <div>
+                    <h4 class="font-bold text-green-400 mb-3 text-base border-b border-green-500/30 pb-1 inline-block">
+                        4. 管理器特有功能 (Manager Only)</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div
+                            class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)] relative overflow-hidden">
+                            <div class="absolute right-0 top-0 p-1 opacity-10 text-4xl">📝</div>
+                            <span class="font-bold text-green-400 block mb-1">本地备注 (Local Note)</span>
+                            <p class="text-[var(--text-dim)] text-xs">
+                                仅存储在 ST Manager 本地数据库中的私有笔记。
+                                <br>• 支持 Markdown 和图片粘贴
+                                <br>• 不会写入角色卡文件，不会发送给 AI
+                                <br>• 适合记录个人攻略、剧情进度或待办事项
+                            </p>
+                        </div>
+                        <div
+                            class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)] relative overflow-hidden">
+                            <div class="absolute right-0 top-0 p-1 opacity-10 text-4xl">📂</div>
+                            <span class="font-bold text-green-400 block mb-1">资源目录 (Assets)</span>
+                            <p class="text-[var(--text-dim)] text-xs">
+                                关联一个物理文件夹来存放该角色的相关文件。
+                                <br>• <strong>Skins (皮肤):</strong> 放入图片即可在详情页左侧切换立绘
+                                <br>• <strong>Lorebooks:</strong> 放入 `lorebooks/` 子目录可自动识别
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. 高级功能详解 -->
+                <div>
+                    <h4
+                        class="font-bold text-orange-400 mb-3 text-base border-b border-orange-500/30 pb-1 inline-block">
+                        5. 高级功能 (Advanced)</h4>
+                    <div class="space-y-4">
+
+                        <!-- 资源链接与包模式 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)]">
+                                <span class="font-bold text-orange-300 block mb-1">🔗 来源链接 (Source Link)</span>
+                                <p class="text-[var(--text-dim)] text-xs">
+                                    记录角色卡的原始发布地址（如 类脑、chubai）。
+                                    <br>点击右上角的 <span class="inline-block border border-gray-600 px-1 rounded">↗
+                                        打开</span> 可快速跳转。
+                                </p>
+                            </div>
+                            <div class="p-3 border border-[var(--border-light)] rounded bg-[var(--bg-body)]">
+                                <span class="font-bold text-orange-300 block mb-1">📦 角色包模式 (Bundle)</span>
+                                <p class="text-[var(--text-dim)] text-xs">
+                                    将单张卡片转换为文件夹管理模式，支持多版本控制。
+                                    <br>• <strong>用途：</strong> 管理同一角色的不同服装差分、不同版本 (v1/v2)。
+                                    <br>• <strong>操作：</strong> 在"管理"页签点击 <span class="text-yellow-500">转为包</span>。
+                                    <br>• <strong>封面：</strong> 点击左侧版本条上的 <span class="text-yellow-500">★</span>
+                                    可切换当前主图和数据。
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- 备份系统 -->
+                        <div class="bg-[var(--bg-sub)] rounded border border-[var(--border-light)] p-3">
+                            <span class="font-bold text-orange-300 block mb-2">🛡️ 备份与时光机 (Backup System)</span>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                <div>
+                                    <span class="font-bold text-[var(--text-main)]">📸 快照 (Snapshot)</span>
+                                    <p class="text-[var(--text-dim)] mt-1">
+                                        手动创建的备份点。建议在进行大改前点击顶部 <span
+                                            class="inline-block border border-gray-600 px-1 rounded">📸</span> 按钮。
+                                    </p>
+                                </div>
+                                <div>
+                                    <span class="font-bold text-[var(--text-main)]">🏷️ 关键快照 (Key Snapshot)</span>
+                                    <p class="text-[var(--text-dim)] mt-1">
+                                        <span class="text-yellow-500">右键点击</span> 快照按钮可创建带标签的备份（如 "v1.0 发布版"），方便长期存档。
+                                    </p>
+                                </div>
+                                <div>
+                                    <span class="font-bold text-[var(--text-main)]">⏪ 时光机 (Rollback)</span>
+                                    <p class="text-[var(--text-dim)] mt-1">
+                                        可视化的版本回滚工具。支持左右分栏对比代码差异 (Diff)，一键恢复到任意历史时刻。
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="mt-2 pt-2 border-t border-[var(--border-light)] text-[10px] text-gray-500">
+                                * 提示：系统会在编辑时自动触发智能保存 (Smart Auto-save)，仅当内容发生实质变化时才会生成自动快照。
+                            </div>
+                        </div>
+
+                        <!-- 更新策略 -->
+                        <div class="bg-[var(--bg-sub)] rounded border border-[var(--border-light)] p-3">
+                            <span class="font-bold text-orange-300 block mb-2">🔄 更新与导入策略 (Update Logic)</span>
+                            <p class="text-xs text-[var(--text-dim)] mb-2">
+                                当您拖拽新图片覆盖旧卡片，或使用 URL 更新时，系统提供四种保护策略：
+                            </p>
+                            <ul class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-[var(--text-dim)]">
+                                <li class="flex items-center gap-2"><span class="text-red-400">🔄
+                                        直接覆盖</span>：用新图和新数据完全替换旧卡（旧数据丢失）。</li>
+                                <li class="flex items-center gap-2"><span class="text-blue-400">🖼️
+                                        保留原图</span>：仅更新文本数据，卡片立绘保持不变。</li>
+                                <li class="flex items-center gap-2"><span class="text-yellow-400">📂
+                                        归档旧图</span>：更新卡片，并将旧立绘移入资源目录保存。</li>
+                                <li class="flex items-center gap-2"><span class="text-purple-400">✨
+                                        新图归档</span>：不改变当前卡片，将新图作为“皮肤”存入资源目录。</li>
+                            </ul>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 border-t border-[var(--border-light)] bg-[var(--bg-sub)] flex justify-end">
+                <button @click="showHelpModal = false" class="btn-primary px-6 py-2 rounded shadow-md font-bold">
+                    明白了
+                </button>
             </div>
         </div>
     </div>

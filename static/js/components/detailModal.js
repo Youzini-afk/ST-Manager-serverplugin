@@ -51,6 +51,7 @@ export default function detailModal() {
         saveOldCoverOnSwap: false,      // 皮肤换封时是否保留旧图
         dragOverUpdate: false,
         dragOverResource: false,
+        showHelpModal: false, 
         
         // 编辑器状态 (V3 规范扁平化数据)
         editingData: {
