@@ -2,12 +2,12 @@ import os
 import hashlib
 import logging
 from PIL import Image
-from flask import Blueprint, send_from_directory
+from flask import Blueprint, request, jsonify, send_from_directory
 
 # === 基础设施 ===
 from core.config import (
     CARDS_FOLDER, DATA_DIR, BASE_DIR, 
-    load_config, THUMB_FOLDER
+    load_config, THUMB_FOLDER, TRASH_FOLDER
 )
 from core.context import ctx
 
@@ -15,6 +15,10 @@ from core.context import ctx
 from core.utils.image import (
     find_sidecar_image, get_default_card_image_path
 )
+from core.utils.filesystem import safe_move_to_trash
+
+from core.services.card_service import resolve_ui_key
+from core.data.ui_store import load_ui_data
 
 logger = logging.getLogger(__name__)
 
@@ -154,3 +158,47 @@ def serve_note_assets(filename):
     """提供笔记内嵌图片"""
     notes_dir = os.path.join(DATA_DIR, 'assets', 'notes_images')
     return send_from_directory(notes_dir, filename)
+
+@bp.route('/api/delete_resource_file', methods=['POST'])
+def api_delete_resource_file():
+    try:
+        data = request.json
+        card_id = data.get('card_id')
+        filename = data.get('filename')
+        
+        if not card_id or not filename:
+            return jsonify({"success": False, "msg": "参数缺失"})
+
+        # 1. 解析资源目录路径
+        ui_data = load_ui_data()
+        ui_key = resolve_ui_key(card_id)
+        res_folder_name = ui_data.get(ui_key, {}).get('resource_folder')
+        
+        if not res_folder_name:
+            return jsonify({"success": False, "msg": "该卡片未设置资源目录"})
+
+        cfg = load_config()
+        res_root = os.path.join(BASE_DIR, cfg.get('resources_dir', 'data/assets/card_assets'))
+        
+        # 确定完整路径
+        if os.path.isabs(res_folder_name):
+            target_file = os.path.join(res_folder_name, filename)
+        else:
+            target_file = os.path.join(res_root, res_folder_name, filename)
+            
+        # 安全检查：防止目录遍历
+        if not os.path.abspath(target_file).startswith(os.path.abspath(res_root)) and not os.path.isabs(res_folder_name):
+             return jsonify({"success": False, "msg": "非法路径"})
+
+        if not os.path.exists(target_file):
+            return jsonify({"success": False, "msg": "文件不存在"})
+
+        # 2. 移至回收站
+        if safe_move_to_trash(target_file, TRASH_FOLDER):
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "msg": "移动到回收站失败"})
+
+    except Exception as e:
+        logger.error(f"Delete resource file error: {e}")
+        return jsonify({"success": False, "msg": str(e)})

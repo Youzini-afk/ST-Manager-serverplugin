@@ -24,6 +24,7 @@ import {
 import { 
     listSkins,
     setSkinAsCover,
+    deleteResourceFile,
     setResourceFolder as apiSetResourceFolder, 
     openResourceFolder as apiOpenResourceFolder, 
     createResourceFolder as apiCreateResourceFolder 
@@ -47,6 +48,7 @@ export default function detailModal() {
         showFirstPreview: false,
         updateImagePolicy: 'overwrite', // 默认策略
         saveOldCoverOnSwap: false,      // 皮肤换封时是否保留旧图
+        dragOverUpdate: false,
         
         // 编辑器状态 (V3 规范扁平化数据)
         editingData: {
@@ -126,6 +128,42 @@ export default function detailModal() {
                     this.updateImagePolicy = 'overwrite';
                     this.saveOldCoverOnSwap = false;
                 }
+            });
+        },
+
+        // 删除当前选中的皮肤
+        deleteCurrentSkin() {
+            if (this.currentSkinIndex === -1) return;
+            const skinName = this.skinImages[this.currentSkinIndex];
+            
+            if (!confirm(`确定要删除皮肤文件 "${skinName}" 吗？\n文件将被移至回收站。`)) return;
+            
+            this.isSaving = true; // 借用 loading 状态
+            
+            deleteResourceFile({
+                card_id: this.activeCard.id,
+                filename: skinName
+            }).then(res => {
+                this.isSaving = false;
+                if (res.success) {
+                    this.$store.global.showToast("🗑️ 皮肤已删除");
+                    
+                    // 移除当前项
+                    this.skinImages.splice(this.currentSkinIndex, 1);
+                    
+                    // 重置选择
+                    this.currentSkinIndex = -1;
+                    
+                    // 如果删完了，刷新一下列表（可选）
+                    if (this.skinImages.length === 0) {
+                        this.fetchSkins(this.editingData.resource_folder);
+                    }
+                } else {
+                    alert("删除失败: " + res.msg);
+                }
+            }).catch(e => {
+                this.isSaving = false;
+                alert("请求错误: " + e);
             });
         },
 
@@ -454,20 +492,38 @@ export default function detailModal() {
             const file = e.target.files[0];
             if (!file) return;
             
+            this.processUpdateFile(file, e.target);
+        },
+
+        // 处理拖拽 Drop
+        handleUpdateDrop(e) {
+            this.dragOverUpdate = false;
+            const files = e.dataTransfer.files;
+            if (!files || files.length === 0) return;
+            
+            const file = files[0]; // 只处理第一个文件，防止用户导入多个文件
+            this.processUpdateFile(file, null);
+        },
+
+        processUpdateFile(file, inputElement) {
             if (!file.name.toLowerCase().endsWith('.png') && !file.name.toLowerCase().endsWith('.json')) {
                 alert("请上传 PNG 或 JSON 格式");
-                e.target.value = '';
+                if(inputElement) inputElement.value = '';
                 return;
             }
 
             let isBundleUpdate = false;
             let finalPolicy = this.updateImagePolicy; // 获取当前选中的策略
+            
             if (this.activeCard.is_bundle) {
-                const choice = confirm(`检测到这是聚合角色包。\n\n[确定] = 添加为新版本 (推荐)\n[取消] = 覆盖当前选中的版本文件`);
-                isBundleUpdate = choice;
+                if (confirm(`检测到这是聚合角色包。\n\n[确定] = 添加为新版本 (推荐)\n[取消] = 覆盖当前选中的版本文件`)) {
+                    isBundleUpdate = true;
+                } else {
+                    isBundleUpdate = false;
+                }
             } else {
                 if (!confirm(`确定要更新角色卡 "${this.activeCard.char_name}" 吗？\n当前策略: ${this.getPolicyName(finalPolicy)}`)) {
-                    e.target.value = '';
+                    if(inputElement) inputElement.value = '';
                     return;
                 }
             }
@@ -484,7 +540,7 @@ export default function detailModal() {
                 tags: this.editingData.tags
             }));
 
-            this.performUpdate(formData, '/api/update_card_file', e.target);
+            this.performUpdate(formData, '/api/update_card_file', inputElement);
         },
 
         // 辅助显示策略名称

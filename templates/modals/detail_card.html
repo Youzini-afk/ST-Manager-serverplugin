@@ -86,24 +86,26 @@
                         </button>
 
                         <!-- 移动端：快照按钮（在图片区域右上角） -->
-                        <button x-show="$store.global.deviceType === 'mobile' && !isCardFlipped" @click="createSnapshot('card')"
-                            class="btn-secondary detail-icon-btn detail-close-mobile" title="快照">
+                        <button x-show="$store.global.deviceType === 'mobile' && !isCardFlipped"
+                            @click="createSnapshot('card')" class="btn-secondary detail-icon-btn detail-close-mobile"
+                            title="快照">
                             📸
                         </button>
                         <!-- 移动端：保存按钮（在图片区域右上角） -->
-                        <button x-show="$store.global.deviceType === 'mobile' && !isCardFlipped" @click="saveChanges()" :disabled="isSaving"
-                            class="btn-secondary detail-icon-btn detail-close-mobile" title="保存卡片">
+                        <button x-show="$store.global.deviceType === 'mobile' && !isCardFlipped" @click="saveChanges()"
+                            :disabled="isSaving" class="btn-secondary detail-icon-btn detail-close-mobile" title="保存卡片">
                             💾
                         </button>
                         <!-- 移动端：关闭按钮（在图片区域右上角） -->
-                        <button x-show="$store.global.deviceType === 'mobile' && !isCardFlipped" @click.stop="showDetail=false" 
-                            class="btn-secondary detail-icon-btn detail-close-mobile" title="关闭">
+                        <button x-show="$store.global.deviceType === 'mobile' && !isCardFlipped"
+                            @click.stop="showDetail=false" class="btn-secondary detail-icon-btn detail-close-mobile"
+                            title="关闭">
                             ✕
                         </button>
                     </div>
 
                     <!-- 移动端：Token 和时间悬浮显示（在图片区域底部） -->
-                    <div x-show="$store.global.deviceType === 'mobile' && !isCardFlipped" 
+                    <div x-show="$store.global.deviceType === 'mobile' && !isCardFlipped"
                         class="detail-mobile-token-overlay">
                         <div class="detail-mobile-token-item">
                             <span class="detail-mobile-token-value text-neon"
@@ -252,7 +254,8 @@
 
                 <!-- Tab 栏 -->
                 <nav class="detail-tabs">
-                    <button x-show="$store.global.deviceType === 'mobile'" class="detail-tab" :class="tab==='info' ? 'active' : ''" @click="tab='info'">
+                    <button x-show="$store.global.deviceType === 'mobile'" class="detail-tab"
+                        :class="tab==='info' ? 'active' : ''" @click="tab='info'">
                         <span class="tab-icon">ℹ️</span>
                         <span class="tab-text">信息</span>
                     </button>
@@ -260,7 +263,8 @@
                         <span class="tab-icon">📝</span>
                         <span class="tab-text">基础</span>
                     </button>
-                    <button x-show="hasPersonaFields" class="detail-tab" :class="tab==='persona' ? 'active' : ''" @click="tab='persona'">
+                    <button x-show="hasPersonaFields" class="detail-tab" :class="tab==='persona' ? 'active' : ''"
+                        @click="tab='persona'">
                         <span class="tab-icon">🧠</span>
                         <span class="tab-text">设定</span>
                     </button>
@@ -289,13 +293,13 @@
                         <div class="detail-title-block">
                             <div class="detail-title-row">
                                 <div class="detail-title-label">角色名称</div>
-    
+
                                 <!-- 名称 -->
                                 <div class="detail-title-inline">
                                     <input type="text" x-model="editingData.char_name" class="detail-title-input">
                                 </div>
                             </div>
-    
+
                             <div class="detail-subrow">
                                 <span class="detail-link-icon">🔗</span>
                                 <input type="text" x-model="editingData.source_link" placeholder="来源链接 (http://...)"
@@ -550,7 +554,8 @@
                                         </div>
                                     </div>
 
-                                    <div x-show="$store.global.deviceType !== 'mobile'" class="flex-1 min-w-0 mx-2 relative group/input h-full flex items-center"
+                                    <div x-show="$store.global.deviceType !== 'mobile'"
+                                        class="flex-1 min-w-0 mx-2 relative group/input h-full flex items-center"
                                         @click.stop>
                                         <div class="w-[1px] h-6 mr-3" style="background: var(--border-light);">
                                         </div>
@@ -862,15 +867,31 @@
                             </div>
 
                             <div class="detail-manage-grid">
-                                <div class="detail-manage-box">
-                                    <div class="detail-manage-label">文件覆盖</div>
-                                    <div class="detail-muted">上传 PNG/JSON 覆盖或添加新版本（Bundle）</div>
-                                    <div class="detail-manage-actions">
-                                        <button @click="triggerCardUpdate()" class="btn-update-card btn-update-file">📂
-                                            选择文件..</button>
-                                        <input type="file" x-ref="cardUpdateInput" @change="handleCardUpdate"
-                                            accept=".png,.json" style="display:none;">
+                                <!-- 1. 文件覆盖 / 升级 (集成拖拽功能) -->
+                                <div class="detail-manage-box relative transition-all duration-200 group"
+                                    :class="dragOverUpdate ? 'border-[var(--accent-main)] bg-[var(--accent-main)]/10' : 'border-dashed border-[var(--border-light)] hover:border-[var(--text-dim)] bg-[var(--bg-sub)]/30 hover:bg-[var(--bg-sub)]'"
+                                    style="border-width: 2px; cursor: pointer; justify-content: center; align-items: center; text-align: center; gap: 0.5rem; min-height: 8rem;"
+                                    @click="triggerCardUpdate()"
+                                    @dragover.prevent="dragOverUpdate = true"
+                                    @dragleave.prevent="dragOverUpdate = false"
+                                    @drop.prevent="handleUpdateDrop($event)">
+                                    
+                                    <div class="text-3xl transition-transform duration-200 mb-1" 
+                                         :class="dragOverUpdate ? 'scale-110' : 'group-hover:scale-110'">
+                                        📂
                                     </div>
+                                    
+                                    <div class="flex flex-col items-center">
+                                        <div class="detail-manage-label" style="margin:0; border:none; padding:0;">文件覆盖 / 升级</div>
+                                        <div class="text-[10px] text-[var(--text-dim)] mt-1 leading-tight opacity-80">
+                                            <span x-show="!dragOverUpdate">点击选择 或 拖拽文件</span>
+                                            <span x-show="dragOverUpdate" class="text-[var(--accent-main)] font-bold">松开以更新</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- 隐藏的文件输入框 (复用原有引用) -->
+                                    <input type="file" x-ref="cardUpdateInput" @change="handleCardUpdate"
+                                        accept=".png,.json" style="display:none;">
                                 </div>
 
                                 <div class="detail-manage-box">
@@ -904,10 +925,20 @@
                                         </label>
 
                                         <!-- 按钮 -->
-                                        <button @click="setSkinAsCover(skinImages[currentSkinIndex])"
-                                            class="btn-secondary w-full justify-center font-bold text-[var(--accent-main)] border-[var(--accent-main)] hover:bg-[var(--accent-main)] hover:text-white transition-all shadow-sm">
-                                            ✨ 设为封面
-                                        </button>
+                                        <div class="flex gap-2">
+                                            <!-- 设为封面按钮 -->
+                                            <button @click="setSkinAsCover(skinImages[currentSkinIndex])"
+                                                class="btn-secondary flex-1 justify-center font-bold text-[var(--accent-main)] border-[var(--accent-main)] hover:bg-[var(--accent-main)] hover:text-white transition-all shadow-sm">
+                                                ✨ 设为封面
+                                            </button>
+                                            
+                                            <!-- 删除皮肤按钮 (新增) -->
+                                            <button @click="deleteCurrentSkin()"
+                                                class="btn-secondary w-10 flex items-center justify-center text-red-400 border-red-400/50 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all shadow-sm"
+                                                title="删除此皮肤文件">
+                                                🗑️
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
