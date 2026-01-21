@@ -525,7 +525,9 @@
 
                                     <div class="detail-inline-input">
                                         <input type="text" x-model="newTagInput" @keydown.enter.prevent="addTag()"
-                                            placeholder="自定义..." class="detail-inline-text">
+                                            placeholder="自定义 (支持批量,逗号分隔)..." 
+                                            title="支持输入多个标签，使用逗号(,)或管道符(|)分隔"
+                                            class="detail-inline-text">
                                         <button @click="addTag()" class="detail-inline-add">+</button>
                                     </div>
                                 </div>

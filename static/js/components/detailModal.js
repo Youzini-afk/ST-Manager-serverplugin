@@ -1030,19 +1030,22 @@ export default function detailModal() {
         },
 
         addTag() {
-            const val = (this.newTagInput || "").trim();
+            const rawInput = this.newTagInput || "";
             
-            if (!val) return;
-
+            if (!rawInput.trim()) return;
             // 确保 tags 数组初始化
             if (!this.editingData.tags) {
                 this.editingData.tags = [];
             }
 
-            // 查重并添加
-            if (!this.editingData.tags.includes(val)) {
-                this.editingData.tags.push(val);
-            }
+            const tagsToAdd = rawInput.split(/[,|，\n]/).map(t => t.trim()).filter(t => t);
+
+            tagsToAdd.forEach(val => {
+                // 查重并添加
+                if (!this.editingData.tags.includes(val)) {
+                    this.editingData.tags.push(val);
+                }
+            });
             
             // 清空输入框
             this.newTagInput = '';

@@ -224,8 +224,12 @@ def execute_rules():
                 t = act['type']
                 v = act['value']
                 if t == 'move_folder': exec_plan['move'] = v
-                elif t == 'add_tag': exec_plan['add_tags'].add(v)
-                elif t == 'remove_tag': exec_plan['remove_tags'].add(v)
+                elif t == 'add_tag': 
+                    tags = [tag.strip() for tag in str(v).split('|') if tag.strip()]
+                    exec_plan['add_tags'].update(tags)
+                elif t == 'remove_tag': 
+                    tags = [tag.strip() for tag in str(v).split('|') if tag.strip()]
+                    exec_plan['remove_tags'].update(tags)
                 elif t == 'set_favorite': exec_plan['favorite'] = (str(v).lower() == 'true')
             
             # 4. 执行
