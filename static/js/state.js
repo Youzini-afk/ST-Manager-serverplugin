@@ -112,7 +112,7 @@ export function initState() {
             tagSearchQuery: '',
             draggedCards: [],   // 当前正在拖拽的卡片 ID 列表
             draggedFolder: null, // 当前正在拖拽的文件夹路径
-            filterFavorites: false,// 是否只显示收藏
+            favFilter: 'none', // 'none' | 'included' | 'excluded'
         },
 
         // === 文件夹模态框状态 ===
@@ -338,6 +338,47 @@ export function initState() {
                 })
                 .catch(err => alert("网络错误: " + err))
                 .finally(() => { this.isLoading = false; });
-        }
+        },
+        // 全局标签切换逻辑 (三态：包含 -> 排除 -> 无)
+        toggleFilterTag(tag) {
+            const vs = this.viewState;
+            let includeTags = [...vs.filterTags];
+            let excludeTags = [...vs.excludedTags];
+
+            const inInclude = includeTags.indexOf(tag);
+            const inExclude = excludeTags.indexOf(tag);
+
+            if (inInclude > -1) {
+                // 当前是包含 -> 转为排除
+                includeTags.splice(inInclude, 1);
+                excludeTags.push(tag);
+            } else if (inExclude > -1) {
+                // 当前是排除 -> 转为无
+                excludeTags.splice(inExclude, 1);
+            } else {
+                // 当前是无 -> 转为包含
+                includeTags.push(tag);
+            }
+
+            // 更新状态
+            vs.filterTags = includeTags;
+            vs.excludedTags = excludeTags;
+            
+            // 触发列表刷新
+            window.dispatchEvent(new CustomEvent('refresh-card-list'));
+        },
+        //  切换收藏筛选 (三态循环)
+        toggleFavFilter() {
+            const vs = this.viewState;
+            if (vs.favFilter === 'none') {
+                vs.favFilter = 'included';
+            } else if (vs.favFilter === 'included') {
+                vs.favFilter = 'excluded';
+            } else {
+                vs.favFilter = 'none';
+            }
+            // 触发列表刷新
+            window.dispatchEvent(new CustomEvent('refresh-card-list'));
+        },
     });
 }

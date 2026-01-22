@@ -61,7 +61,7 @@ export default function cardGrid() {
             this.$watch('$store.global.itemsPerPage', () => { this.currentPage = 1; this.fetchCards(); });
 
             // 监听收藏过滤变化
-            this.$watch('$store.global.viewState.filterFavorites', () => { this.currentPage = 1; this.fetchCards(); });
+            this.$watch('$store.global.viewState.favFilter', () => { this.currentPage = 1; this.fetchCards(); });
             // 监听设置中的收藏前置变化
             this.$watch('$store.global.settingsForm.favorites_first', () => { this.fetchCards(); });
 
@@ -299,7 +299,7 @@ export default function cardGrid() {
                 search_type: vs.searchType || 'mix',
                 sort: store.settingsForm.default_sort || 'date_desc',
                 recursive: vs.recursiveFilter,
-                favorites_only: vs.filterFavorites,
+                fav_filter: vs.favFilter,
                 favorites_first: store.settingsForm.favorites_first
             };
 

@@ -47,7 +47,7 @@
             <div>
                 <span style="font-weight: bold; font-size: 1.125rem; white-space: nowrap;">ST Manager</span>
                 <span
-                    style="font-size: 0.75rem; background: var(--accent-main); color: white; padding:2px 6px; border-radius:4px; margin-left: 0.25rem;">v78</span>
+                    style="font-size: 0.75rem; background: var(--accent-main); color: white; padding:2px 6px; border-radius:4px; margin-left: 0.25rem;">V79</span>
             </div>
         </div>
 
@@ -159,15 +159,25 @@
             </div>
         </div>
 
-        <!-- 收藏筛选按钮 -->
+        <!-- 收藏筛选按钮 (三态) -->
         <button
-            @click="$store.global.viewState.filterFavorites = !$store.global.viewState.filterFavorites; fetchCards()"
-            :class="$store.global.viewState.filterFavorites ? 'text-yellow-400 bg-yellow-400/10 border-yellow-400/50 scale-110' : 'text-gray-500 border-transparent hover:text-yellow-400 hover:scale-105'"
-            class="btn-secondary transition-all"
-            style="padding: 0.5rem; margin-right: 0.5rem; border: 1px solid; position: relative;">
-            <span>★</span>
-            <div x-show="$store.global.viewState.filterFavorites"
-                class="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping"></div>
+            @click="toggleFavFilter()"
+            class="btn-secondary transition-all flex items-center justify-center"
+            :class="{
+                'text-yellow-400 bg-yellow-400/10 border-yellow-400/50 scale-110': $store.global.viewState.favFilter === 'included',
+                'text-red-400 bg-red-400/10 border-red-400/50 scale-110': $store.global.viewState.favFilter === 'excluded',
+                'text-gray-500 border-transparent hover:text-yellow-400 hover:scale-105': $store.global.viewState.favFilter === 'none'
+            }"
+            :title="$store.global.viewState.favFilter === 'included' ? '当前：只显示收藏' : ($store.global.viewState.favFilter === 'excluded' ? '当前：排除收藏' : '当前：显示全部')"
+            style="padding: 0.5rem; margin-right: 0.5rem; border: 1px solid; position: relative; min-width: 36px;">
+            
+            <!-- 根据状态切换图标 -->
+            <span x-show="$store.global.viewState.favFilter !== 'excluded'" class="text-lg">★</span>
+            <span x-show="$store.global.viewState.favFilter === 'excluded'" class="text-lg font-bold">🚫</span>
+            
+            <!-- 激活时的光晕动画 (包含状态) -->
+            <div x-show="$store.global.viewState.favFilter === 'included'"
+                class="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping" style="pointer-events: none;"></div>
         </button>
 
         <!-- 搜索组合框 -->
@@ -317,10 +327,17 @@
         </div>
 
         <!-- 收藏筛选（移动端） -->
-        <button @click="$store.global.viewState.filterFavorites = !$store.global.viewState.filterFavorites; fetchCards(); closeMobileMenu()"
-            :class="$store.global.viewState.filterFavorites ? 'mobile-favorite-btn active' : 'mobile-favorite-btn'">
-            <span class="favorite-icon">★</span>
-            <span>收藏筛选</span>
+        <button @click="toggleFavFilter(); closeMobileMenu()"
+            class="mobile-favorite-btn transition-colors"
+            :class="{
+                'active': $store.global.viewState.favFilter === 'included',
+                'excluded': $store.global.viewState.favFilter === 'excluded'
+            }"
+            :style="$store.global.viewState.favFilter === 'excluded' ? 'background-color: rgba(248, 113, 113, 0.15); border-color: rgba(248, 113, 113, 0.5); color: #f87171;' : ''">
+            
+            <span class="favorite-icon" x-text="$store.global.viewState.favFilter === 'excluded' ? '🚫' : '★'"></span>
+            
+            <span x-text="$store.global.viewState.favFilter === 'included' ? '只看收藏' : ($store.global.viewState.favFilter === 'excluded' ? '排除收藏' : '收藏筛选')"></span>
         </button>
     </div>
 </div>

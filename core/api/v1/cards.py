@@ -103,7 +103,7 @@ def api_list_cards():
     recursive_str = request.args.get('recursive', 'true')
     is_recursive = recursive_str.lower() == 'true'
 
-    filter_fav = request.args.get('favorites_only', 'false') == 'true'
+    fav_filter = request.args.get('fav_filter', 'none') # 'included', 'excluded', 'none'
     fav_first = request.args.get('favorites_first', 'false') == 'true'
 
     # 1. 获取所有卡片, 浅拷贝
@@ -156,8 +156,10 @@ def api_list_cards():
             sidebar_tags_set.add(t)
     sidebar_tags = sorted(list(sidebar_tags_set))
 
-    if filter_fav:
+    if fav_filter == 'included':
         candidates = [c for c in candidates if c.get('is_favorite')]
+    elif fav_filter == 'excluded':
+        candidates = [c for c in candidates if not c.get('is_favorite')]
 
     # 3. 搜索过滤 (在已经(可能)被分类缩小范围的基础上继续过滤)
     if search:
