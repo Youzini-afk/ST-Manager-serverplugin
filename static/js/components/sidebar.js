@@ -12,6 +12,8 @@ export default function sidebar() {
         // 本地展开状态
         expandedFolders: {},
         dragOverFolder: null,
+        // 标签索引展开状态（默认展开）
+        tagsSectionExpanded: true,
 
         // 设备类型和模式
         get deviceType() {
