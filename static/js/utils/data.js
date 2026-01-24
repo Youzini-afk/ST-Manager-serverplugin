@@ -121,43 +121,41 @@ export function toStV3Worldbook(bookData, fallbackName = "World Info") {
 
 // 前端归一化 entry 字段
 export function normalizeWiEntry(entry) {
-    // === 辅助转换函数：确保是数字，且处理 boolean ===
+    // === 辅助转换函数 ===
     const toNumber = (val, fieldName) => {
-        // 如果是 boolean，强制转 0/1
         if (val === true) return 1;
         if (val === false) return 0;
-        
-        // 如果是 null/undefined/空串
         if (val === null || val === undefined || val === '') {
-            // 针对特定字段给默认值
             if (fieldName === 'delayUntilRecursion') return 0;
             if (fieldName === 'probability') return 100;
-            return 0; // 默认兜底
+            return 0;
         }
-        
         const n = Number(val);
         return isNaN(n) ? 0 : n;
     };
 
-    return {
-        ...entry,
+    // 1. 获取原始数组 (优先使用新字段，回退到旧字段)
+    // 使用浅拷贝 [...arr] 断开引用
+    const rawKeys = Array.isArray(entry.keys) ? entry.keys : (Array.isArray(entry.key) ? entry.key : []);
+    const rawSecKeys = Array.isArray(entry.secondary_keys) ? entry.secondary_keys : (Array.isArray(entry.keysecondary) ? entry.keysecondary : []);
 
-        // === UI/内部统一字段 ===
-        id: entry.id ?? entry.uid ?? Math.floor(Math.random() * 1000000000),
+    // 2. 计算核心规范化字段
+    const normalizedFields = {
+        // ID: 优先用 id，其次 uid，最后生成随机数
+        // 注意：不要完全依赖 uid，因为不同世界书的 uid 都是从0开始，合并时会冲突
+        id: entry.id ?? (entry.uid ? Number(entry.uid) + Math.floor(Math.random() * 1000) : Math.floor(Math.random() * 1000000000)),
         
-        // 强制转换为数字，避免 "false" 传入 input[type=number]
         insertion_order: toNumber(entry.insertion_order ?? entry.order, 'order'),
         position: toNumber(entry.position, 'position'),
         depth: toNumber(entry.depth, 'depth'),
         role: toNumber(entry.role, 'role'),
         probability: toNumber(entry.probability, 'probability'),
         selectiveLogic: toNumber(entry.selectiveLogic, 'selectiveLogic'),
-        
-        // 核心报错点：必须转为数字
         delayUntilRecursion: toNumber(entry.delayUntilRecursion, 'delayUntilRecursion'),
         
-        // 布尔值字段保持布尔值
+        // 逻辑反转处理：统一使用enabled
         enabled: (entry.enabled !== undefined) ? !!entry.enabled : !(entry.disable === true),
+        
         constant: !!entry.constant,
         vectorized: !!entry.vectorized,
         excludeRecursion: !!entry.excludeRecursion,
@@ -169,13 +167,28 @@ export function normalizeWiEntry(entry) {
         selective: entry.selective !== undefined ? !!entry.selective : true,
         useProbability: entry.useProbability !== undefined ? !!entry.useProbability : true,
 
-        // 确保数组
-        keys: Array.isArray(entry.keys || entry.key) ? (entry.keys || entry.key) : [],
-        secondary_keys: Array.isArray(entry.secondary_keys || entry.keysecondary) ? (entry.secondary_keys || entry.keysecondary) : [],
+        // 数组拷贝
+        keys: [...rawKeys],
+        secondary_keys: [...rawSecKeys],
         
-        // 文本
         content: entry.content || "",
         comment: entry.comment || ""
+    };
+
+    // 3. 构造最终对象：保留 Unknown Fields，但移除 Legacy Fields
+    // 这里的技巧是：先解构出我们不要的旧字段，把剩下的放在 others 里
+    const { 
+        // 黑名单：这些是 ST 的旧字段名，我们已经转换到上面的 normalizedFields 里了，不要保留在对象中
+        key, keysecondary, disable, order, uid, 
+        // 同时也把我们要覆盖的字段解构出来（防止它们留在 others 里被重复定义）
+        id, insertion_order, enabled, keys, secondary_keys, content, comment,
+        // 剩下的就是真正的 Unknown Fields
+        ...others 
+    } = entry;
+
+    return {
+        ...others,           // 1. 先放插件数据/未知字段
+        ...normalizedFields  // 2. 再放我们标准化的核心数据
     };
 }
 

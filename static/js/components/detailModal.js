@@ -31,7 +31,7 @@ import {
     createResourceFolder as apiCreateResourceFolder 
 } from '../api/resource.js';
 
-import { getCleanedV3Data, updateWiKeys } from '../utils/data.js';
+import { getCleanedV3Data, updateWiKeys, toStV3Worldbook } from '../utils/data.js';
 import { formatDate, getVersionName, estimateTokens, formatWiKeys } from '../utils/format.js';
 import { updateShadowContent } from '../utils/dom.js';
 import { createAutoSaver } from '../utils/autoSave.js'; 
@@ -1145,7 +1145,44 @@ export default function detailModal() {
             window.dispatchEvent(new CustomEvent('open-markdown-view', {
                 detail: content
             }));
-        }
+        },
+        // 导入函数
+        handleWiImport(e) {
+            const file = e.target.files[0];
+            const inputEl = e.target; // 保存引用以便清理
+
+            this.processWiImportFile(
+                file, 
+                this.getWorldInfoCount(), // 获取当前条目数用于判断覆盖
+                
+                // 成功回调
+                (importedData) => {
+                    // 1. 更新主数据对象
+                    this.editingData.character_book = importedData;
+                    
+                    // 2. 同步更新 Raw JSON 编辑器的字符串
+                    this.editingData.character_book_raw = JSON.stringify(importedData, null, 2);
+                    
+                    // 3. UI 状态重置
+                    this.currentWiIndex = 0;
+                    inputEl.value = ''; // 清空 input，允许重复导入同名文件
+                    
+                    // 4. 反馈
+                    this.$store.global.showToast(`✅ 成功导入: "${importedData.name}"`);
+
+                },
+                
+                // 取消/失败回调
+                () => {
+                    inputEl.value = ''; // 无论如何都要清空 input
+                }
+            );
+        },
+
+        // 2. 导出函数
+        exportWorldBookSingle() {
+            this.downloadWorldInfoJson(this.editingData.character_book, "World Info");
+        },
 
     }
 }

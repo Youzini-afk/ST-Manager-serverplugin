@@ -4,7 +4,7 @@
  */
 
 import { createSnapshot as apiCreateSnapshot, openPath } from '../api/system.js';
-import { getCleanedV3Data } from './data.js';
+import { getCleanedV3Data, toStV3Worldbook } from './data.js';
 
 export const wiHelpers = {
 
@@ -320,5 +320,143 @@ export const wiHelpers = {
                 editingWiFile: contextItem 
             }
         }));
+    },
+    // 1. 公共导出函数
+    downloadWorldInfoJson(bookData, fallbackName = "World Info") {
+        const finalExportData = toStV3Worldbook(bookData, bookData.name || fallbackName);
+        const filename = (finalExportData.name || fallbackName).replace(/[\\/:*?"<>|]/g, "_") + ".json";
+
+        try {
+            const jsonStr = JSON.stringify(finalExportData); // 紧凑格式
+            const blob = new Blob([jsonStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert("导出失败: " + e.message);
+        }
+    },
+
+    // 2. 公共导入解析逻辑
+    processWiImportFile(file, existingCount, onSuccess, onCancel) {
+        if (!file) {
+            if (onCancel) onCancel();
+            return;
+        }
+
+        // 1. 覆盖警告
+        if (existingCount > 0) {
+            if (!confirm("⚠️ 警告：导入将【覆盖】当前世界书内容。\n是否继续？")) {
+                if (onCancel) onCancel();
+                return;
+            }
+        }
+
+        const fileNameNoExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+
+        reader.onload = (event) => {
+            try {
+                const json = JSON.parse(event.target.result);
+                let rawEntries = [];
+                let newName = fileNameNoExt;
+
+                // 2. 格式识别逻辑 (兼容 V2/V3/导出格式)
+                if (Array.isArray(json)) {
+                    // 纯数组 (V2)
+                    rawEntries = json;
+                } else if (json && (json.entries || json.data)) {
+                    // 对象结构 (V3 或 包装器)
+                    const dataRoot = json.entries ? json : (json.data || {}); // 兼容 data.entries 结构
+                    
+                    if (Array.isArray(dataRoot.entries)) {
+                        rawEntries = dataRoot.entries;
+                    } else if (typeof dataRoot.entries === 'object' && dataRoot.entries !== null) {
+                        rawEntries = Object.values(dataRoot.entries);
+                    }
+
+                    // 尝试获取内部名称
+                    const internalName = json.name || (json.data && json.data.name);
+                    if (internalName && typeof internalName === 'string' && internalName.trim() !== "") {
+                        newName = internalName;
+                    }
+                }
+
+                if (!rawEntries || (rawEntries.length === 0 && !json.entries)) {
+                    throw new Error("未能识别有效的世界书 JSON 结构");
+                }
+
+                // 3. 数据清洗与规范化
+                const normalizedEntries = rawEntries.map(entry => {
+                    // 定义核心字段的标准值
+                    const coreData = {
+                        // ID: 优先用原有的，没有则生成
+                        id: entry.id || entry.uid || Math.floor(Math.random() * 1000000),
+
+                        // 键名映射 (ST use 'key', we use 'keys')
+                        keys: Array.isArray(entry.keys) ? entry.keys : (Array.isArray(entry.key) ? entry.key : []),
+                        secondary_keys: Array.isArray(entry.secondary_keys) ? entry.secondary_keys : (Array.isArray(entry.keysecondary) ? entry.keysecondary : []),
+
+                        // 启用状态 (ST use 'disable', we use 'enabled')
+                        enabled: (entry.enabled !== undefined) ? !!entry.enabled : (entry.disable === undefined ? true : !entry.disable),
+
+                        // 数值类型安全
+                        insertion_order: Number(entry.insertion_order || entry.order || 100),
+                        position: Number(entry.position !== undefined ? entry.position : 1), // 默认 Character
+                        depth: Number(entry.depth !== undefined ? entry.depth : 4),
+                        probability: Number(entry.probability !== undefined ? entry.probability : 100),
+                        selectiveLogic: Number(entry.selectiveLogic || 0),
+                        role: entry.role !== undefined ? Number(entry.role) : null,
+
+                        // 布尔值类型安全
+                        constant: !!entry.constant,
+                        vectorized: !!entry.vectorized,
+                        selective: entry.selective !== undefined ? !!entry.selective : true,
+                        useProbability: entry.useProbability !== undefined ? !!entry.useProbability : true,
+                        preventRecursion: !!entry.preventRecursion,
+                        excludeRecursion: !!entry.excludeRecursion,
+                        matchWholeWords: !!entry.matchWholeWords,
+                        use_regex: !!entry.use_regex,
+                        caseSensitive: !!entry.caseSensitive,
+
+                        // 文本内容
+                        content: String(entry.content || ""),
+                        comment: String(entry.comment || "")
+                    };
+
+                    // 【关键】先展开原始 entry 保留所有未知字段 (如 extensions, displayIndex等)
+                    // 后展开 coreData 覆盖并修正核心逻辑字段
+                    return { ...entry, ...coreData };
+                });
+
+                // 4. 按权重排序 (可选)
+                normalizedEntries.sort((a, b) => b.insertion_order - a.insertion_order);
+
+                // 成功回调
+                if (onSuccess) {
+                    onSuccess({
+                        name: newName,
+                        entries: normalizedEntries
+                    });
+                }
+
+            } catch (err) {
+                console.error("[WI Import Error]", err);
+                alert("❌ 导入失败: " + err.message);
+                if (onCancel) onCancel();
+            }
+        };
+
+        reader.onerror = () => {
+            alert("❌ 读取文件出错");
+            if (onCancel) onCancel();
+        };
+
+        reader.readAsText(file);
     },
 };

@@ -402,37 +402,8 @@ export default function wiEditor() {
         },
 
         exportWorldBookSingle() {
-            const entries = this.getWIArrayRef();
-            const bookName = (this.editingData.character_book && this.editingData.character_book.name) 
-                             ? this.editingData.character_book.name 
-                             : "World Info";
-
-            if (!entries || entries.length === 0) {
-                alert("当前没有世界书数据可导出");
-                return;
-            }
-
-            // 调用 Utils 生成 V3 格式
-            const finalExportData = toStV3Worldbook({ name: bookName, entries: entries }, bookName);
-            // 补充 originalData 结构 (ST 导出习惯)
-            finalExportData.originalData = JSON.parse(JSON.stringify(finalExportData));
-
-            const filename = bookName.replace(/[\\/:*?"<>|]/g, "_") + ".json";
-
-            try {
-                const jsonStr = JSON.stringify(finalExportData); // 不带空格，最小化
-                const blob = new Blob([jsonStr], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            } catch (e) {
-                alert("导出失败: " + e.message);
-            }
+            const book = this.editingData.character_book || { entries: [], name: "World Info" };
+            this.downloadWorldInfoJson(book, book.name);
         },
 
         // === 剪切板逻辑 ===
