@@ -1,127 +1,104 @@
-/* =========================================
-   1. 核心变量定义 (Theme Variables)
-   ========================================= */
 :root {
-    /* === 强调色 (Accent Colors) - 由 JS 动态修改 === */
-    --accent-main: #2563eb;       /* 主色 */
-    --accent-hover: #1d4ed8;      /* 悬停色 */
-    --accent-light: #60a5fa;      /* 亮色/边框色 */
-    --accent-faint: rgba(37, 99, 235, 0.3); /* 淡淡的背景/光晕 */
-
-    /* === 收藏相关颜色 === */
-    --accent-favorite: #fbbf24;      /* 收藏强调色 */
-    --accent-favorite-faint: rgba(251, 191, 36, 0.2); /* 收藏淡色背景 */
-
-    /* === 深色模式默认值 (Dark Mode Defaults) === */
-    --bg-body: #030712;           /* 页面最底层背景 */
-    --bg-panel: #111827;          /* 卡片、侧边栏、模态框背景 */
-    --bg-sub: #1f2937;            /* 次级容器：输入框、顶部栏、标签 */
-    --bg-hover: #374151;          /* 列表项/按钮悬停背景 */
-    --bg-tag: #1f2937;            /* 标签背景 */
-    --bg-modal-left: #000000;     /* 模态框左侧图片区（保持黑色） */
-    --bg-code: #0f172a;       /* 深色模式下的代码背景 */
-    --bg-raw-section: #1f2937; /* WI Raw 编辑区背景 */
-    
-    --border-main: #1f2937;       /* 主要分割线 (较隐蔽) */
-    --border-light: #374151;      /* 明显边框 (输入框、按钮) */
-    
-    --text-main: #e5e7eb;         /* 主要文字 (亮灰) */
-    --text-sub: #9ca3af;          /* 次要文字 (灰) */
-    --text-dim: #6b7280;          /* 暗淡文字 (深灰) */
-    --text-on-accent: #ffffff;    /* 强调色背景上的文字 */
-    --text-code: #a5f3fc;     /* 深色模式下的代码文字 */
-    
+    --accent-main: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-light: #60a5fa;
+    --accent-faint: rgba(37, 99, 235, 0.3);
+    --accent-favorite: #fbbf24;
+    --accent-favorite-faint: rgba(251, 191, 36, 0.2);
+    --bg-body: #030712;
+    --bg-panel: #111827;
+    --bg-sub: #1f2937;
+    --bg-hover: #374151;
+    --bg-tag: #1f2937;
+    --bg-modal-left: #000000;
+    --bg-code: #0f172a;
+    --bg-raw-section: #1f2937;
+    --border-main: #1f2937;
+    --border-light: #374151;
+    --text-main: #e5e7eb;
+    --text-sub: #9ca3af;
+    --text-dim: #6b7280;
+    --text-on-accent: #ffffff;
+    --text-code: #a5f3fc;
     --fallback-fonts: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     --shadow-color: rgba(0, 0, 0, 0.5);
-    
-    /* 滚动条 */
     --scrollbar-track: #111827;
     --scrollbar-thumb: #374151;
-
-    /* 次要按钮 */
     --btn-sec-bg: #1f2937;
     --btn-sec-text: #9ca3af;
     --btn-sec-border: #374151;
-
-    /* === 语义化状态色 (Status Colors) === */
     --color-primary: var(--accent-main);
     --color-primary-rgb: var(--accent-main-rgb);
     --color-danger: #ef4444;
     --color-success: #10b981;
     --color-warn: #f59e0b;
-    
     --text-warn: var(--color-warn);
     --border-warn: rgba(245, 158, 11, 0.3);
     --text-success: var(--color-success);
-    
-    /* === 布局别名 === */
     --bg-item: var(--bg-sub);
-
-    /* 自定义样式变量 */
-    --card-min-width: 200px;      /* 卡片最小宽度 (控制密度) */
-    --card-height: 24rem;         /* 卡片高度 */
-    --app-font-family: ui-sans-serif, system-ui, sans-serif; /* 全局字体 */
-
-    /* 增强质感的光影变量 */
+    --card-min-width: 200px;
+    --card-height: 24rem;
+    --app-font-family: ui-sans-serif, system-ui, sans-serif;
     --bg-panel-rgb: 30, 41, 59;
     --glass-bg: rgba(var(--bg-panel-rgb), 0.7);
     --glass-border: rgba(255, 255, 255, 0.08);
     --shadow-elevation: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
     --shadow-inset: inset 0 2px 4px 0 rgba(0, 0, 0, 0.15);
     --accent-main-rgb: 99, 102, 241;
-
-    /* 背景图相关 */
-    --bg-image-url: none;         /* 背景图 URL */
-    --bg-overlay-opacity: 0.95;   /* 遮罩不透明度 (默认很高，接近纯色) */
-    --bg-blur: 0px;               /* 背景模糊度 */
-
-    /* === Z-Index 层级管理系统 === */
+    --bg-image-url: none;
+    --bg-overlay-opacity: 0.95;
+    --bg-blur: 0px;
     --z-base: 0;
-    --z-floating: 100;        /* 卡片内部的悬浮按钮 */
-    --z-modal-std: 1000;      /* 标准模态框 (详情页, 设置) */
-    --z-modal-editor: 2000;   /* 全屏编辑器 (世界书) */
-    --z-modal-popover: 3000;  /* 功能性弹窗 (时光机, 大编辑器, 标签选择) */
-    --z-context-menu: 9000;   /* 右键菜单 */
-    --z-toast: 9500;          /* 全局通知 */
-    --z-loading: 9999;        /* 加载遮罩 (最高) */
+    --z-floating: 100;
+    --z-modal-std: 1000;
+    --z-modal-editor: 2000;
+    --z-modal-popover: 3000;
+    --z-context-menu: 9000;
+    --z-toast: 9500;
+    --z-loading: 9999
 }
 
-/* 通用 Z-Index 工具类 */
-.z-modal-std { z-index: var(--z-modal-std) !important; }
-.z-modal-editor { z-index: var(--z-modal-editor) !important; }
-.z-modal-popover { z-index: var(--z-modal-popover) !important; }
-.z-context-menu { z-index: var(--z-context-menu) !important; }
-.z-topmost { z-index: var(--z-loading) !important; }
+.z-modal-std {
+    z-index: var(--z-modal-std) !important
+}
 
-/* === 浅色模式覆盖值 (Light Mode Overrides) === */
+.z-modal-editor {
+    z-index: var(--z-modal-editor) !important
+}
+
+.z-modal-popover {
+    z-index: var(--z-modal-popover) !important
+}
+
+.z-context-menu {
+    z-index: var(--z-context-menu) !important
+}
+
+.z-topmost {
+    z-index: var(--z-loading) !important
+}
+
 html.light-mode {
-    --bg-body: #f3f4f6;           /* 浅灰背景 */
-    --bg-panel: #ffffff;          /* 纯白面板 */
-    --bg-sub: #f9fafb;            /* 极浅灰组件 */
-    --bg-hover: #e5e7eb;          /* 悬停变灰 */
-    --bg-tag: #e5e7eb;            /* 浅色标签 */
-    --bg-modal-left: #18181b;     /* 图片预览区保持深色，避免亮瞎眼 */
-    --bg-code: #f1f5f9;       /* 浅色模式下的代码背景 */
+    --bg-body: #f3f4f6;
+    --bg-panel: #ffffff;
+    --bg-sub: #f9fafb;
+    --bg-hover: #e5e7eb;
+    --bg-tag: #e5e7eb;
+    --bg-modal-left: #18181b;
+    --bg-code: #f1f5f9;
     --bg-raw-section: #f3f4f6;
-    
-    --border-main: #e5e7eb;       /* 浅色分割 */
-    --border-light: #d1d5db;      /* 边框 (稍微深一点的灰) */
-    
-    --text-main: #111827;         /* 深黑文字 */
-    --text-sub: #4b5563;          /* 深灰文字 */
-    --text-dim: #9ca3af;          /* 浅灰文字 */
-    --text-code: #0f172a;     /* 浅色模式下的代码文字 */
-    
-    --shadow-color: rgba(0, 0, 0, 0.1); /* 阴影变淡 */
-    
+    --border-main: #e5e7eb;
+    --border-light: #d1d5db;
+    --text-main: #111827;
+    --text-sub: #4b5563;
+    --text-dim: #9ca3af;
+    --text-code: #0f172a;
+    --shadow-color: rgba(0, 0, 0, 0.1);
     --scrollbar-track: #f3f4f6;
     --scrollbar-thumb: #d1d5db;
-
-    /* 次要按钮在亮色下 */
     --btn-sec-bg: #ffffff;
     --btn-sec-text: #4b5563;
     --btn-sec-border: #d1d5db;
-
-    --accent-favorite: #f59e0b;      /* 浅色模式下的收藏色 */
-    --accent-favorite-faint: rgba(245, 158, 11, 0.2);
+    --accent-favorite: #f59e0b;
+    --accent-favorite-faint: rgba(245, 158, 11, 0.2)
 }

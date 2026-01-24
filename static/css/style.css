@@ -1,29 +1,19 @@
-/* 1. 核心变量 */
 @import "modules/variables.css";
 
-/* 2. 基础重置 */
 @import "modules/base.css";
 
-/* 3. 通用组件 */
 @import "modules/components.css";
 
-/* 4. 页面布局 */
 @import "modules/layout.css";
 
-/* 5. 视图 - 角色卡 */
 @import "modules/view-cards.css";
 
-/* 6. 视图 - 世界书 */
 @import "modules/view-wi.css";
 
-/* 7. 模态框 - 详情页 */
 @import "modules/modal-detail.css";
 
-/* 8. 模态框 - 设置 */
 @import "modules/modal-settings.css";
 
-/* 9. 模态框 - 其他工具 */
 @import "modules/modal-tools.css";
 
-/* 10. 自动化规则管理器 */
 @import "modules/modal-automation.css";
