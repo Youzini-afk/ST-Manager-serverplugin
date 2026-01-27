@@ -380,6 +380,14 @@ export default function advancedEditor() {
             list[index] = list[newIdx];
             list[newIdx] = temp;
 
+            // 如果移动的是当前正在编辑的项，索引需要跟随变化
+            if (this.activeScriptIndex === index) {
+                this.activeScriptIndex = newIdx;
+            } else if (this.activeScriptIndex === newIdx) {
+                // 如果移动的项挤占了当前选中项的位置，选中项索引也要调整
+                this.activeScriptIndex = index;
+            }
+
             // 强制更新
             this.editingData.extensions.tavern_helper = [...helper];
         }

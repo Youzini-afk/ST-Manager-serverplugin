@@ -436,8 +436,18 @@
                                 <!-- 操作按钮 -->
                                 <div
                                     class="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                                    <button @click.stop="exportScript(idx)" class="text-[10px] hover:text-blue-400"
-                                        title="导出">📤</button>
+                                    <!-- 导出按钮 -->
+                                    <button @click.stop="exportScript(idx)" class="sort-btn-xs rounded" title="导出">
+                                        📤
+                                    </button>
+
+                                    <!-- 排序按钮组 -->
+                                    <div class="flex flex-col">
+                                        <button @click.stop="moveTavernScript(script.id, -1)"
+                                            class="sort-btn-xs rounded-t border-b-0" title="上移">▲</button>
+                                        <button @click.stop="moveTavernScript(script.id, 1)"
+                                            class="sort-btn-xs rounded-b" title="下移">▼</button>
+                                    </div>
                                 </div>
                                 <button @click.stop="removeTavernScript(script.id)"
                                     class="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 p-1 flex-shrink-0 transition">
