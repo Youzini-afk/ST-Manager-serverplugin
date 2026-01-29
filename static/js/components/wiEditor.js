@@ -117,6 +117,20 @@ export default function wiEditor() {
             const payload = {
                 id: this.editingData.id, // 角色卡 ID
                 ...cleanData,
+                // 1. 映射后端专用字段名
+                char_name: cleanData.name || this.editingData.char_name,
+                
+                // 2. 传递文件名 (防止意外重命名或丢失扩展名)
+                new_filename: this.editingData.filename,
+
+                // 3. 补全 UI 专属字段 (如果不传，后端会将其清空)
+                ui_summary: this.editingData.ui_summary || "",
+                source_link: this.editingData.source_link || "",
+                resource_folder: this.editingData.resource_folder || "",
+                
+                // 4. Bundle 状态透传 (保持包模式状态不丢失)
+                save_ui_to_bundle: this.editingData.is_bundle,
+                bundle_dir: this.editingData.is_bundle ? this.editingData.bundle_dir : undefined,
                 // 显式确保 character_book 被包含（虽然 getCleanedV3Data 也会包含，但双重保险）
                 character_book: this.editingData.character_book
             };
