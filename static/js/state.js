@@ -79,6 +79,7 @@ export function initState() {
         // 设置表单
         settingsForm: { 
             cards_dir: 'data/library/characters',
+            quick_replies_dir: 'data/library/extensions/quick-replies',
             default_sort: 'date_desc', 
             st_url: 'http://127.0.0.1:8000', 
             st_username: '',

@@ -38,6 +38,7 @@ DEFAULT_CONFIG = {
     "world_info_dir": "data/library/lorebooks",
     "regex_dir": "data/library/extensions/regex",
     "scripts_dir": "data/library/extensions/tavern_helper",
+    "quick_replies_dir": "data/library/extensions/quick-replies", 
     "default_sort": "date_desc",
     "theme_accent": "blue",
     "host": "127.0.0.1",

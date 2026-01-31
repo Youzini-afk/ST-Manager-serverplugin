@@ -13,7 +13,7 @@ export default function extensionGrid() {
         init() {
             // 监听模式切换
             this.$watch('$store.global.currentMode', (val) => {
-                if (val === 'regex' || val === 'scripts') {
+                if (['regex', 'scripts', 'quick_replies'].includes(val)) {
                     this.currentMode = val;
                     this.fetchItems();
                 }
@@ -76,7 +76,9 @@ export default function extensionGrid() {
         openItem(item) {
             // 调用 System API 读取文件
             // 然后触发 open-script-file-editor 事件 (复用 advancedEditor)
-            const type = this.currentMode === 'regex' ? 'regex' : 'script';
+            let type = 'regex';
+            if (this.currentMode === 'scripts') type = 'script';
+            if (this.currentMode === 'quick_replies') type = 'quick_reply';
             
             this.isLoading = true;
             fetch('/api/read_file_content', {

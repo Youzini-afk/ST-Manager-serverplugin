@@ -79,6 +79,13 @@
                     </div>
 
                     <div class="settings-row">
+                        <label class="settings-label text-yellow-500">快速回复路径 (Quick Replies)</label>
+                        <div class="settings-desc">存放全局快速回复 (.json) 的目录</div>
+                        <input type="text" x-model="settingsForm.quick_replies_dir" class="form-input mt-2"
+                            placeholder="extensions/quick-replies">
+                    </div>
+
+                    <div class="settings-row">
                         <label class="settings-label text-green-400">资源文件夹路径 (Resources)</label>
                         <div class="settings-desc">存放角色附件、背景图、聊天记录备份的根目录</div>
                         <input type="text" x-model="settingsForm.resources_dir" class="form-input mt-2"

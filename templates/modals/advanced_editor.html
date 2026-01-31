@@ -642,6 +642,177 @@
                 </div>
             </div>
 
+            <!-- === Tab 3: Quick Replies === -->
+            <div x-show="isFileMode && fileType === 'quick_reply'" class="adv-split-view">
+
+                <!-- 左侧：回复列表 -->
+                <div class="adv-list-pane custom-scrollbar overflow-y-auto">
+                    <div
+                        class="p-3 border-b border-[var(--border-light)] flex justify-between items-center bg-[var(--bg-sub)] sticky top-0 z-10">
+                        <span class="text-xs font-bold text-[var(--text-sub)] uppercase">Reply List</span>
+                        <button @click="addQrEntry()"
+                            class="text-xs bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded transition">
+                            + 新建
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col">
+                        <template x-for="(qr, idx) in editingData.quick_reply?.qrList" :key="qr.id || idx">
+                            <div class="adv-list-item group flex items-center justify-between gap-2"
+                                :class="activeQrIndex === idx ? 'active' : ''" @click="activeQrIndex = idx">
+
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="font-bold text-sm truncate" x-text="qr.label || '未命名'"></span>
+                                    </div>
+                                    <div class="text-[10px] text-[var(--text-dim)] truncate opacity-70"
+                                        x-text="qr.message || '(无内容)'"></div>
+                                </div>
+
+                                <div
+                                    class="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                    <div class="flex gap-1">
+                                        <button @click.stop="moveQrEntry(idx, -1)"
+                                            class="sort-btn-xs rounded-t border-b-0">▲</button>
+                                        <button @click.stop="moveQrEntry(idx, 1)"
+                                            class="sort-btn-xs rounded-b">▼</button>
+                                    </div>
+                                </div>
+                                <button @click.stop="removeQrEntry(idx)"
+                                    class="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 p-1">✕</button>
+                            </div>
+                        </template>
+                        <div x-show="!editingData.quick_reply?.qrList?.length"
+                            class="p-8 text-center text-[var(--text-dim)] text-xs">
+                            暂无回复条目
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：QR 编辑器 -->
+                <template x-if="editingData.quick_reply">
+                    <div class="adv-editor-pane custom-scrollbar">
+
+                        <!-- A. 全局设置 (Set Settings) -->
+                        <div class="adv-section mb-4" x-show="activeQrIndex === -1">
+                            <div class="adv-section-title text-yellow-500">⚙️ 集合设置 (Set Settings)</div>
+
+                            <div class="flex flex-col gap-4">
+                                <div>
+                                    <label class="form-label">集合名称 (Set Name)</label>
+                                    <input type="text" x-model="editingData.quick_reply.name"
+                                        class="form-input font-bold text-lg">
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4">
+                                    <label
+                                        class="flex items-center gap-2 cursor-pointer select-none border p-2 rounded hover:bg-[var(--bg-hover)] border-[var(--border-light)]">
+                                        <input type="checkbox" x-model="editingData.quick_reply.disableSend"
+                                            class="w-4 h-4 rounded">
+                                        <div class="flex flex-col">
+                                            <span class="text-sm font-bold">禁用发送</span>
+                                            <span class="text-[10px] text-[var(--text-dim)]">点击仅插入输入框，不自动发送</span>
+                                        </div>
+                                    </label>
+
+                                    <label
+                                        class="flex items-center gap-2 cursor-pointer select-none border p-2 rounded hover:bg-[var(--bg-hover)] border-[var(--border-light)]">
+                                        <input type="checkbox" x-model="editingData.quick_reply.placeBeforeInput"
+                                            class="w-4 h-4 rounded">
+                                        <div class="flex flex-col">
+                                            <span class="text-sm font-bold">置于输入前</span>
+                                            <span class="text-[10px] text-[var(--text-dim)]">插入到当前输入内容的前面</span>
+                                        </div>
+                                    </label>
+
+                                    <label
+                                        class="flex items-center gap-2 cursor-pointer select-none border p-2 rounded hover:bg-[var(--bg-hover)] border-[var(--border-light)]">
+                                        <input type="checkbox" x-model="editingData.quick_reply.injectInput"
+                                            class="w-4 h-4 rounded">
+                                        <div class="flex flex-col">
+                                            <span class="text-sm font-bold">自动注入输入</span>
+                                            <span class="text-[10px] text-[var(--text-dim)]">将 {{input}}
+                                                替换为当前输入框内容</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="mt-4 text-center text-sm text-[var(--text-dim)]">
+                                <p>👈 请在左侧选择一个条目进行详细编辑</p>
+                            </div>
+                        </div>
+
+                        <!-- B. 条目编辑 (Item Editor) -->
+                        <template x-if="activeQrIndex !== -1 && editingData.quick_reply.qrList[activeQrIndex]">
+                            <div class="flex flex-col gap-4">
+                                <div class="flex gap-4 items-end border-b border-[var(--border-light)] pb-4">
+                                    <div class="flex-1">
+                                        <label class="form-label">按钮标签 (Label)</label>
+                                        <input type="text" x-model="editingData.quick_reply.qrList[activeQrIndex].label"
+                                            class="form-input font-bold">
+                                    </div>
+                                    <div class="flex-1">
+                                        <label class="form-label">标题/提示 (Title)</label>
+                                        <input type="text" x-model="editingData.quick_reply.qrList[activeQrIndex].title"
+                                            class="form-input" placeholder="悬停提示...">
+                                    </div>
+                                </div>
+
+                                <div class="adv-section flex flex-col h-48">
+                                    <div class="adv-section-title text-green-500">📝 发送内容 (Message)</div>
+                                    <textarea x-model="editingData.quick_reply.qrList[activeQrIndex].message"
+                                        class="form-textarea font-mono text-xs flex-1 resize-none custom-scrollbar"
+                                        placeholder="支持宏 (Macros), /commands 等"></textarea>
+                                </div>
+
+                                <div class="adv-section">
+                                    <div class="adv-section-title text-blue-400">⚡ 触发条件 (Execute On)</div>
+                                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                        <label class="flex items-center gap-2 cursor-pointer select-none text-xs"><input
+                                                type="checkbox"
+                                                x-model="editingData.quick_reply.qrList[activeQrIndex].executeOnStartup"
+                                                class="rounded"> Startup (启动时)</label>
+                                        <label class="flex items-center gap-2 cursor-pointer select-none text-xs"><input
+                                                type="checkbox"
+                                                x-model="editingData.quick_reply.qrList[activeQrIndex].executeOnUser"
+                                                class="rounded"> User Message</label>
+                                        <label class="flex items-center gap-2 cursor-pointer select-none text-xs"><input
+                                                type="checkbox"
+                                                x-model="editingData.quick_reply.qrList[activeQrIndex].executeOnAi"
+                                                class="rounded"> AI Message</label>
+                                        <label class="flex items-center gap-2 cursor-pointer select-none text-xs"><input
+                                                type="checkbox"
+                                                x-model="editingData.quick_reply.qrList[activeQrIndex].executeOnNewChat"
+                                                class="rounded"> New Chat</label>
+                                        <label class="flex items-center gap-2 cursor-pointer select-none text-xs"><input
+                                                type="checkbox"
+                                                x-model="editingData.quick_reply.qrList[activeQrIndex].executeOnChatChange"
+                                                class="rounded"> Chat Change</label>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-4 border-t border-[var(--border-light)] pt-4">
+                                    <label
+                                        class="flex items-center gap-2 cursor-pointer select-none text-xs text-red-400">
+                                        <input type="checkbox"
+                                            x-model="editingData.quick_reply.qrList[activeQrIndex].isHidden"
+                                            class="accent-red-500 rounded">
+                                        隐藏此按钮
+                                    </label>
+                                    <label class="flex items-center gap-2 cursor-pointer select-none text-xs">
+                                        <input type="checkbox"
+                                            x-model="editingData.quick_reply.qrList[activeQrIndex].showLabel"
+                                            class="rounded">
+                                        仅显示标签 (不显示图标)
+                                    </label>
+                                </div>
+                            </div>
+                        </template>
+
+                    </div>
+                </template>
+            </div>
+
         </div>
 
         <!-- 4. 底部 Action Bar -->

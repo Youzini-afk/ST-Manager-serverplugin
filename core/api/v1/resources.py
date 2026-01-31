@@ -272,6 +272,10 @@ def api_upload_card_resource():
                      (isinstance(data, list) and len(data) > 0 and ('keys' in data[0] or 'key' in data[0])):
                     sub_dir = "lorebooks"
                     is_lorebook = True
+                    
+                # D. 快速回复特征: 包含 'qrList'
+                elif (isinstance(data, dict) and 'qrList' in data):
+                    sub_dir = "extensions/quick-replies"
                 
                 # D. 兜底: 无法识别的 JSON 放在根目录，或者你可以指定一个 'misc' 目录
                 else:
@@ -383,7 +387,8 @@ def api_list_resource_files():
             "skins": [],
             "lorebooks": [],
             "regex": [],
-            "scripts": []
+            "scripts": [],
+            "quick_replies": []
         }
 
         # 1. 扫描根目录获取皮肤 (Skins)
@@ -402,7 +407,8 @@ def api_list_resource_files():
         sub_map = {
             'lorebooks': 'lorebooks',
             'regex': 'extensions/regex',
-            'scripts': 'extensions/tavern_helper'
+            'scripts': 'extensions/tavern_helper',
+            'quick_replies': 'extensions/quick-replies'
         }
 
         for category, sub_name in sub_map.items():

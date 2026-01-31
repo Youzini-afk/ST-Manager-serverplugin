@@ -92,6 +92,7 @@ export default function detailModal() {
         resourceLorebooks: [],
         resourceRegex: [],
         resourceScripts: [],
+        resourceQuickReplies: [],
         // 皮肤与版本
         skinImages: [],
         currentSkinIndex: -1,
@@ -204,6 +205,7 @@ export default function detailModal() {
                     this.resourceLorebooks = res.files.lorebooks || [];
                     this.resourceRegex = res.files.regex || [];
                     this.resourceScripts = res.files.scripts || [];
+                    this.resourceQuickReplies = res.files.quick_replies || [];
                 }
             }).catch(err => {
                 console.error("Failed to load resources:", err);

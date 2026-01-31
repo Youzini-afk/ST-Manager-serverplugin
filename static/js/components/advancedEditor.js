@@ -24,6 +24,9 @@ export default function advancedEditor() {
         activeScriptIndex: -1,
         scriptDataJson: "",
 
+        // QR脚本扩展
+        activeQrIndex: -1,
+
         // 数据引用 (从 detailModal 传入)
         editingData: {
             extensions: {
@@ -74,6 +77,8 @@ export default function advancedEditor() {
                 // 立即清洗数据，防止 Alpine 渲染报错
                 if (type === 'script') {
                     this._normalizeScript(fileData);
+                } else if (type === 'quick_reply') {
+                    this._normalizeQrSet(fileData);
                 }
                 this.showAdvancedModal = true;
 
@@ -82,7 +87,10 @@ export default function advancedEditor() {
                 this.editingData = {
                     extensions: {
                         regex_scripts: type === 'regex' ? [fileData] : [],
-                        tavern_helper: type === 'script' ? { scripts: [fileData] } : { scripts: [] }
+                        tavern_helper: type === 'script' ? { scripts: [fileData] } : { scripts: [] },
+                        // 这里的结构其实是为了适配 existing UI，QR 是单文件模式，直接存 fileData 即可
+                        // 为了统一，挂在 editingData 上
+                        quick_reply: type === 'quick_reply' ? fileData : null
                     }
                 };
 
@@ -107,6 +115,19 @@ export default function advancedEditor() {
                     }
                 }
             });
+        },
+
+        // 初始化/标准化 QR 数据
+        _normalizeQrSet(data) {
+            if (!data.name) data.name = "New Quick Reply Set";
+            if (!Array.isArray(data.qrList)) data.qrList = [];
+            // 确保每个 QR 条目有必要字段
+            data.qrList.forEach(qr => {
+                if (qr.id === undefined) qr.id = Math.floor(Math.random() * 1000000);
+                if (qr.label === undefined) qr.label = "New Reply";
+                if (qr.message === undefined) qr.message = "";
+            });
+            return data;
         },
 
         // 数据标准化辅助函数
@@ -432,6 +453,45 @@ export default function advancedEditor() {
             }
         },
 
+        // QR 管理方法
+        addQrEntry() {
+            if (!this.editingData.quick_reply) return;
+            this.editingData.quick_reply.qrList.push({
+                id: Math.floor(Math.random() * 1000000),
+                label: "新回复",
+                message: "",
+                title: "",
+                showLabel: false,
+                preventAutoExecute: true,
+                isHidden: false,
+                executeOnStartup: false,
+                executeOnUser: false,
+                executeOnAi: false,
+                executeOnChatChange: false,
+                executeOnNewChat: false
+            });
+            // 滚动到底部
+            this.activeQrIndex = this.editingData.quick_reply.qrList.length - 1;
+        },
+
+        removeQrEntry(index) {
+            if (confirm("删除此回复条目？")) {
+                this.editingData.quick_reply.qrList.splice(index, 1);
+                this.activeQrIndex = -1;
+            }
+        },
+
+        moveQrEntry(index, dir) {
+            const list = this.editingData.quick_reply.qrList;
+            const newIdx = index + dir;
+            if (newIdx < 0 || newIdx >= list.length) return;
+            const temp = list[index];
+            list[index] = list[newIdx];
+            list[newIdx] = temp;
+            // 保持选中
+            if(this.activeQrIndex === index) this.activeQrIndex = newIdx;
+        },
+
         // 保存独立文件的方法
         saveFileChanges() {
             if (!this.isFileMode || !this.currentFilePath) return;
@@ -439,10 +499,12 @@ export default function advancedEditor() {
             try {
                 if (this.fileType === 'regex') {
                     contentToSave = this.editingData.extensions.regex_scripts[0];
-                } else {
+                } else if (this.fileType === 'script') {
                     this.syncScriptDataJson();
                     const scripts = this.getTavernScripts();
                     contentToSave = scripts[0];
+                } else if (this.fileType === 'quick_reply') {
+                    contentToSave = this.editingData.quick_reply;
                 }
                 import('../api/resource.js').then(module => {
                     module.saveScriptFile({
@@ -458,5 +520,7 @@ export default function advancedEditor() {
                 alert("保存前处理数据出错: " + e.message);
             }
         },
+
+
     }
 }

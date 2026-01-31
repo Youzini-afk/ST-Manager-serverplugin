@@ -59,6 +59,11 @@
                 :class="currentMode === 'scripts' ? 'text-[var(--accent-light)] bg-[var(--bg-hover)]' : 'text-[var(--text-dim)]'">
                 📜 ST 脚本
             </button>
+            <button @click="switchMode('quick_replies')"
+                class="px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors hover:bg-[var(--bg-hover)]"
+                :class="currentMode === 'quick_replies' ? 'text-[var(--accent-light)] bg-[var(--bg-hover)]' : 'text-[var(--text-dim)]'">
+                ⚡ 快速回复
+            </button>
         </div>
     </div>
     <!-- === 模式 1: 角色卡侧边栏 (Folder + Tags) === -->

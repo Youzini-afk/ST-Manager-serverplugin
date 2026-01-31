@@ -1223,6 +1223,34 @@
                                                 </div>
                                             </div>
 
+                                            <!-- 右侧栏下方：快速回复列表 -->
+                                            <div
+                                                class="border border-[var(--border-light)] rounded-lg bg-[var(--bg-sub)]/30 flex flex-col">
+                                                <div
+                                                    class="p-2 border-b border-[var(--border-light)] bg-[var(--bg-sub)] rounded-t-lg">
+                                                    <span
+                                                        class="text-xs font-bold text-yellow-500 uppercase flex items-center gap-1">
+                                                        <span>⚡</span> 快速回复 (Quick Replies)
+                                                    </span>
+                                                </div>
+                                                <div class="p-2 space-y-1">
+                                                    <template x-for="file in resourceQuickReplies" :key="file.path">
+                                                        <div class="flex items-center justify-between p-2 rounded border border-transparent hover:border-[var(--border-light)] hover:bg-[var(--bg-hover)] cursor-pointer group transition-colors"
+                                                            @click="openResourceScript(file, 'quick_reply')">
+                                                            <div class="flex items-center gap-2 min-w-0">
+                                                                <span class="text-yellow-500 text-sm">⚡</span>
+                                                                <span class="text-xs text-[var(--text-main)] truncate"
+                                                                    x-text="file.name"></span>
+                                                            </div>
+                                                            <span
+                                                                class="text-[10px] text-[var(--text-dim)] opacity-0 group-hover:opacity-100">编辑</span>
+                                                        </div>
+                                                    </template>
+                                                    <div x-show="resourceQuickReplies.length === 0"
+                                                        class="text-[10px] text-[var(--text-dim)] text-center py-2 italic">
+                                                        无文件</div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

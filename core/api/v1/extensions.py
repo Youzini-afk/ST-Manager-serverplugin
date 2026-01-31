@@ -20,30 +20,41 @@ def _get_paths():
     raw_scripts = cfg.get('scripts_dir', 'data/library/extensions/tavern_helper')
     scripts_root = raw_scripts if os.path.isabs(raw_scripts) else os.path.join(BASE_DIR, raw_scripts)
     
+    # 获取 QR 路径
+    raw_qr = cfg.get('quick_replies_dir', 'data/library/extensions/quick-replies')
+    qr_root = raw_qr if os.path.isabs(raw_qr) else os.path.join(BASE_DIR, raw_qr)
+    
     # 确保目录存在
-    for p in [regex_root, scripts_root]:
+    for p in [regex_root, scripts_root, qr_root]:
         if not os.path.exists(p):
             try: os.makedirs(p)
             except: pass
             
-    return regex_root, scripts_root
+    return regex_root, scripts_root, qr_root
 
 @bp.route('/api/extensions/list', methods=['GET'])
 def list_extensions():
     """
     列出扩展文件
-    mode: 'regex' | 'scripts'
+    mode: 'regex' | 'scripts' | 'quick_replies'
     filter_type: 'all' | 'global' | 'resource'
     """
     mode = request.args.get('mode', 'regex')
     filter_type = request.args.get('filter_type', 'all')
     
     items = []
-    regex_global_root, scripts_global_root = _get_paths()
+    regex_global_root, scripts_global_root, qr_global_root = _get_paths()
     
     # 确定目标全局目录和资源子目录名
-    target_global_dir = regex_global_root if mode == 'regex' else scripts_global_root
-    target_res_sub = "extensions/regex" if mode == 'regex' else "extensions/tavern_helper"
+    target_global_dir = regex_global_root
+    target_res_sub = "extensions/regex"
+    
+    if mode == 'scripts':
+        target_global_dir = scripts_global_root
+        target_res_sub = "extensions/tavern_helper"
+    elif mode == 'quick_replies':
+        target_global_dir = qr_global_root
+        target_res_sub = "extensions/quick-replies"
 
     # 1. 扫描全局目录
     if filter_type in ['all', 'global']:
