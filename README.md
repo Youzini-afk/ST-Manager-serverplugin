@@ -26,6 +26,7 @@ ST-Manager 是一款专为 SillyTavern AI 聊天程序设计的资源可视化�
 - 📦 **版本管理** - 支持角色卡 Bundle 多版本管理
 - 🏷️ **标签系统** - 强大的标签过滤和批量标签管理
 - 🔍 **智能搜索** - 支持名称、文件名、标签、创作者等多维度搜索
+- 📝 **预设管理** - 管理 SillyTavern 生成参数预设（JSON）并支持上传/查看
 
 ---
 
@@ -102,6 +103,7 @@ ST-Manager/
 │   │       ├── resources.py  # 资源 API
 │   │       ├── automation.py # 自动化 API
 │   │       └── extensions.py # 扩展 API
+│   │       └── presets.py    # 预设 API
 │   │
 │   ├── services/              # 业务服务层
 │   │   ├── scan_service.py   # 文件扫描服务
@@ -137,6 +139,7 @@ ST-Manager/
 │   │   ├── grid_cards.html
 │   │   ├── grid_wi.html
 │   │   └── grid_extensions.html
+│   │   └── grid_presets.html
 │   └── modals/               # 模态框模板
 │       ├── detail_card.html
 │       ├── detail_wi_fullscreen.html
@@ -151,6 +154,7 @@ ST-Manager/
 │   │   └── modules/
 │   ├── js/                   # JavaScript 文件
 │   │   └── utils/
+│   │   └── components/presetGrid.js
 │   └── lib/                  # 第三方库
 │       ├── alpine.js
 │       ├── tailwindcss.js
@@ -167,6 +171,7 @@ ST-Manager/
     │   ├── characters/      # 角色卡目录
     │   ├── lorebooks/       # 世界书目录
     │   └── extensions/      # 扩展脚本
+    │   └── presets/         # 预设目录
     └── temp/                # 临时文件
 ```
 
@@ -196,6 +201,7 @@ ST-Manager/
   "regex_dir": "data/library/extensions/regex",
   "scripts_dir": "data/library/extensions/tavern_helper",
   "quick_replies_dir": "data/library/extensions/quick-replies",
+  "presets_dir": "data/library/presets",
   "resources_dir": "data/assets/card_assets"
 }
 ```
@@ -395,6 +401,10 @@ ST-Manager 内置强大的规则引擎，支持基于条件的自动化任务执
 #### 快速回复（Quick Replies）
 - 快速回复模板管理
 - 支持分类和搜索
+
+#### 预设（Presets）
+- 管理生成参数预设（JSON）
+- 支持拖拽上传、查看与基础信息展示
 
 ---
 
