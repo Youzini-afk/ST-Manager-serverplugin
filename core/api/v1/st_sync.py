@@ -8,14 +8,95 @@ ST Sync API - SillyTavern 资源同步接口
 """
 
 import os
+import json
 import logging
+from typing import Dict, Any
 from flask import Blueprint, request, jsonify
 from core.config import load_config, BASE_DIR
-from core.services.st_client import get_st_client, refresh_st_client
+from core.services.st_client import get_st_client, refresh_st_client, STClient
+from core.utils.filesystem import sanitize_filename
+from core.utils.regex import extract_global_regex_from_settings
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('st_sync', __name__, url_prefix='/api/st')
+
+
+def _export_global_regex(settings_path: str, target_dir: str) -> Dict[str, Any]:
+    """
+    将 settings.json 中的全局正则导出为独立脚本文件，便于同步到本地库。
+    返回 { success, failed, files }。
+    """
+    result = {"success": 0, "failed": 0, "files": []}
+    if not settings_path or not os.path.exists(settings_path):
+        return result
+
+    try:
+        with open(settings_path, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+    except Exception as e:
+        logger.warning(f"读取 settings.json 失败: {e}")
+        return result
+
+    regex_items = []
+    raw_list = (raw.get('extension_settings') or {}).get('regex')
+    if isinstance(raw_list, list) and raw_list:
+        for item in raw_list:
+            if isinstance(item, dict) and (item.get('findRegex') or item.get('scriptName')):
+                regex_items.append(item)
+    else:
+        for idx, item in enumerate(extract_global_regex_from_settings(raw)):
+            if not isinstance(item, dict):
+                continue
+            regex_items.append({
+                "scriptName": item.get("name") or f"Global Regex {idx + 1}",
+                "findRegex": item.get("pattern", ""),
+                "replaceString": item.get("replace", ""),
+                "disabled": not bool(item.get("enabled", True)),
+                "placement": item.get("scope") if isinstance(item.get("scope"), list) else [],
+                "flags": item.get("flags", "")
+            })
+
+    if not regex_items:
+        return result
+
+    os.makedirs(target_dir, exist_ok=True)
+
+    # 清理旧的全局导出文件（仅删除标记为本程序导出的）
+    try:
+        for f in os.listdir(target_dir):
+            if not (f.startswith("global__") and f.lower().endswith('.json')):
+                continue
+            file_path = os.path.join(target_dir, f)
+            try:
+                with open(file_path, 'r', encoding='utf-8') as rf:
+                    data = json.load(rf)
+                if isinstance(data, dict) and data.get('__source') == 'settings.json':
+                    os.remove(file_path)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    for idx, item in enumerate(regex_items):
+        try:
+            name = item.get('scriptName') or item.get('name') or f"global_{idx + 1}"
+            safe_name = sanitize_filename(str(name))
+            filename = f"global__{idx + 1}_{safe_name}.json"
+            file_path = os.path.join(target_dir, filename)
+            payload = dict(item)
+            if not payload.get('scriptName'):
+                payload['scriptName'] = name
+            payload.setdefault('__source', 'settings.json')
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            result["success"] += 1
+            result["files"].append(filename)
+        except Exception as e:
+            logger.warning(f"写入全局正则文件失败: {e}")
+            result["failed"] += 1
+
+    return result
 
 
 @bp.route('/test_connection', methods=['GET'])
@@ -95,27 +176,41 @@ def validate_path():
                 "error": "请提供路径"
             }), 400
             
-        client = get_st_client()
+        client = STClient(st_data_dir=path) if 'STClient' in globals() else get_st_client()
         is_valid = client._validate_st_path(path)
-        
+
         resources = {}
         if is_valid:
-            # 检查各资源目录
-            from core.services.st_client import ST_DATA_STRUCTURE
-            for res_type, subdir in ST_DATA_STRUCTURE.items():
-                if res_type == "settings":
+            # 检查各资源目录（兼容传入 data/default-user 或根目录）
+            for res_type in ['characters', 'worlds', 'presets', 'regex', 'quick_replies']:
+                subdir = client.get_st_subdir(res_type)
+                if res_type == 'regex':
+                    script_count = 0
+                    if subdir and os.path.exists(subdir):
+                        try:
+                            script_count = len([f for f in os.listdir(subdir) if f.endswith('.json')])
+                        except Exception:
+                            script_count = 0
+                    global_info = client.get_global_regex()
+                    global_count = global_info.get("count", 0) if isinstance(global_info, dict) else 0
+                    resources[res_type] = {
+                        "path": subdir or (global_info.get("path") if isinstance(global_info, dict) else None),
+                        "count": script_count + global_count,
+                        "script_count": script_count,
+                        "global_count": global_count
+                    }
                     continue
-                full_path = os.path.join(path, subdir)
-                if os.path.exists(full_path):
+
+                if subdir and os.path.exists(subdir):
                     try:
-                        count = len([f for f in os.listdir(full_path) 
+                        count = len([f for f in os.listdir(subdir)
                                    if f.endswith('.json') or f.endswith('.png')])
                         resources[res_type] = {
-                            "path": full_path,
+                            "path": subdir,
                             "count": count
                         }
-                    except:
-                        resources[res_type] = {"path": full_path, "count": 0}
+                    except Exception:
+                        resources[res_type] = {"path": subdir, "count": 0}
         
         return jsonify({
             "success": True,
@@ -297,6 +392,16 @@ def sync_resources():
         else:
             # 同步全部
             result = client.sync_all_resources(resource_type, target_dir, use_api)
+
+        # 正则同步：补充全局正则（settings.json）
+        if resource_type == 'regex':
+            settings_path = client.get_settings_path()
+            global_result = _export_global_regex(settings_path, target_dir)
+            result["global_regex"] = global_result
+            if global_result.get("success"):
+                result["success"] += global_result.get("success", 0)
+            if global_result.get("failed"):
+                result["failed"] += global_result.get("failed", 0)
             
         return jsonify({
             "success": True,
@@ -387,3 +492,22 @@ def get_summary():
             "success": False,
             "error": str(e)
         }), 500
+
+
+@bp.route('/regex', methods=['GET'])
+def get_regex_aggregate():
+    """
+    聚合全局正则 + 预设绑定正则
+    Query:
+        presets_path: 自定义预设目录（可选）
+        settings_path: 自定义 settings.json 路径（可选）
+    """
+    try:
+        presets_path = request.args.get('presets_path')
+        settings_path = request.args.get('settings_path')
+        client = get_st_client()
+        result = client.aggregate_regex(presets_path, settings_path)
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        logger.error(f"获取正则汇总失败: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500

@@ -424,6 +424,41 @@
 
                     <div class="settings-group-title">高级选项</div>
 
+                    <div class="settings-row border-b border-[var(--border-light)] py-3">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="settings-label">PNG 元数据确定性排序</div>
+                                <div class="settings-desc">关闭可避免改变外部工具的字节级行为（建议保持关闭）</div>
+                            </div>
+                            <input type="checkbox" x-model="settingsForm.png_deterministic_sort"
+                                class="w-5 h-5 accent-[var(--accent-main)]">
+                        </div>
+                    </div>
+
+                    <div class="settings-row border-b border-[var(--border-light)] py-3">
+                        <div class="settings-label">世界书预览限制</div>
+                        <div class="settings-desc">控制详情弹窗的预览条目数与单条内容最大字符数</div>
+                        <div class="grid grid-cols-2 gap-4 mt-2">
+                            <div>
+                                <label class="text-xs text-[var(--text-dim)]">预览最大条目数</label>
+                                <input type="number" x-model.number="settingsForm.wi_preview_limit"
+                                    class="form-input mt-1" min="0">
+                            </div>
+                            <div>
+                                <label class="text-xs text-[var(--text-dim)]">单条最大字符数</label>
+                                <input type="number" x-model.number="settingsForm.wi_preview_entry_max_chars"
+                                    class="form-input mt-1" min="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-row border-b border-[var(--border-light)] py-3">
+                        <div class="settings-label">资源目录绝对路径白名单</div>
+                        <div class="settings-desc">一行一个路径，用于允许资源文件列表接口访问绝对路径</div>
+                        <textarea x-model="allowedAbsRootsText" class="form-input mt-2"
+                            rows="3" placeholder="D:\\SillyTavern\\assets&#10;E:\\resources"></textarea>
+                    </div>
+
                     <!-- 自动保存设置行 -->
                     <div class="settings-row border-b border-[var(--border-light)] py-3">
                         <div class="flex justify-between items-center">

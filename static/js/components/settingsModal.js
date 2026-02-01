@@ -11,6 +11,7 @@ export default function settingsModal() {
     return {
         // === 本地状态 ===
         activeSettingTab: 'general',
+        allowedAbsRootsText: '',
 
         get settingsForm() { return this.$store.global.settingsForm; },
         get showSettingsModal() { 
@@ -70,13 +71,26 @@ export default function settingsModal() {
         init() {
             // 设置数据直接绑定到 $store.global.settingsForm
             // 无需本地 duplicate
+            this.$watch('showSettingsModal', (val) => {
+                if (val) {
+                    const roots = this.settingsForm.allowed_abs_resource_roots || [];
+                    this.allowedAbsRootsText = Array.isArray(roots) ? roots.join('\n') : String(roots || '');
+                }
+            });
         },
 
         openSettings() {
+            const roots = this.settingsForm.allowed_abs_resource_roots || [];
+            this.allowedAbsRootsText = Array.isArray(roots) ? roots.join('\n') : String(roots || '');
             this.showSettingsModal = true;
         },
 
         saveSettings(closeModal = true) {
+            const roots = (this.allowedAbsRootsText || '')
+                .split(/[\r\n,]+/)
+                .map(s => s.trim())
+                .filter(Boolean);
+            this.settingsForm.allowed_abs_resource_roots = roots;
             // 调用 Store 的 Action
             this.$store.global.saveSettings(closeModal)
                 .then(res => {

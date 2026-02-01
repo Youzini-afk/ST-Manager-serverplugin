@@ -18,6 +18,7 @@ import logging
 import requests
 from typing import Optional, Dict, List, Any, Tuple
 from core.config import load_config, BASE_DIR
+from core.utils.regex import extract_regex_from_preset_data, extract_global_regex_from_settings
 
 logger = logging.getLogger(__name__)
 
@@ -99,13 +100,92 @@ class STClient:
     
     def _validate_st_path(self, path: str) -> bool:
         """验证路径是否为有效的 SillyTavern 安装目录"""
-        # 检查关键目录和文件
+        if not path or not os.path.exists(path):
+            return False
+
+        # 允许传入根目录 / data / default-user
+        normalized = os.path.normpath(path)
         indicators = [
-            os.path.join(path, "data", "default-user"),
-            os.path.join(path, "public"),
-            os.path.join(path, "server.js"),
+            os.path.join(normalized, "data", "default-user"),
+            os.path.join(normalized, "public"),
+            os.path.join(normalized, "server.js"),
+            os.path.join(normalized, "settings.json"),
+            os.path.join(normalized, "characters"),
+            os.path.join(normalized, "worlds"),
         ]
-        return any(os.path.exists(p) for p in indicators)
+        if any(os.path.exists(p) for p in indicators):
+            return True
+
+        # 允许传入 default-user 直接目录
+        try:
+            if os.path.basename(normalized).lower() == "default-user":
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _first_existing_path(self, candidates: List[str], want_dir: bool = True) -> Optional[str]:
+        """返回第一个存在的路径（目录/文件）"""
+        if not candidates:
+            return None
+        username = os.environ.get('USERNAME', os.environ.get('USER', ''))
+        seen = set()
+        for raw in candidates:
+            if not raw:
+                continue
+            path = os.path.expanduser(raw.replace('{user}', username))
+            path = os.path.normpath(path)
+            if path in seen:
+                continue
+            seen.add(path)
+            if os.path.exists(path):
+                if want_dir and os.path.isdir(path):
+                    return path
+                if not want_dir and os.path.isfile(path):
+                    return path
+        return None
+
+    def _candidate_roots(self) -> List[str]:
+        roots = []
+        if self.st_data_dir:
+            roots.append(self.st_data_dir)
+        detected = self.detect_st_path()
+        if detected:
+            roots.append(detected)
+        return roots
+
+    def _normalize_default_user_dir(self, path: str) -> Optional[str]:
+        if not path:
+            return None
+        try:
+            normalized = os.path.normpath(path)
+            parts = normalized.split(os.sep)
+            if "default-user" in parts:
+                idx = parts.index("default-user")
+                return os.sep.join(parts[: idx + 1])
+            base = os.path.basename(normalized).lower()
+            if base == "default-user":
+                return normalized
+            if base == "data":
+                return os.path.join(normalized, "default-user")
+            return os.path.join(normalized, "data", "default-user")
+        except Exception:
+            return None
+
+    def _candidate_user_dirs(self) -> List[str]:
+        candidates = []
+        for root in self._candidate_roots():
+            user_dir = self._normalize_default_user_dir(root)
+            if user_dir:
+                candidates.append(user_dir)
+        candidates.extend([
+            os.path.join(os.getcwd(), "data", "default-user"),
+            os.path.join(os.getcwd(), "..", "data", "default-user"),
+            r"D:\SillyTavern\data\default-user",
+            r"E:\SillyTavern\data\default-user",
+            r"C:\SillyTavern\data\default-user",
+        ])
+        return candidates
     
     def get_st_subdir(self, resource_type: str) -> Optional[str]:
         """
@@ -117,18 +197,89 @@ class STClient:
         Returns:
             完整路径，未找到返回 None
         """
+        if resource_type == "presets":
+            return self.get_presets_dir()
+        if resource_type == "regex":
+            return self.get_regex_dir()
+        if resource_type == "settings":
+            return self.get_settings_path()
+
         st_path = self.st_data_dir or self.detect_st_path()
         if not st_path:
             return None
-            
+
         subdir = ST_DATA_STRUCTURE.get(resource_type)
         if not subdir:
             return None
-            
-        full_path = os.path.join(st_path, subdir)
+
+        # 允许 st_path 指向 data/default-user 或 data
+        user_dir = self._normalize_default_user_dir(st_path)
+        if user_dir:
+            try:
+                prefix = os.path.normpath(os.path.join("data", "default-user"))
+                norm_subdir = os.path.normpath(subdir)
+                rel = os.path.relpath(norm_subdir, prefix) if norm_subdir.startswith(prefix) else subdir
+                full_path = os.path.join(user_dir, rel)
+            except Exception:
+                full_path = os.path.join(user_dir, subdir)
+        else:
+            full_path = os.path.join(st_path, subdir)
+
         if os.path.exists(full_path):
             return full_path
         return None
+
+    def get_settings_path(self, custom_path: Optional[str] = None) -> Optional[str]:
+        """获取 SillyTavern settings.json 路径"""
+        if custom_path and os.path.exists(custom_path):
+            return custom_path
+
+        candidates = []
+        for user_dir in self._candidate_user_dirs():
+            candidates.append(os.path.join(user_dir, "settings.json"))
+
+        for root in self._candidate_roots():
+            candidates.append(os.path.join(root, "settings.json"))
+
+        return self._first_existing_path(candidates, want_dir=False)
+
+    def get_presets_dir(self, custom_path: Optional[str] = None) -> Optional[str]:
+        """获取 SillyTavern 预设目录路径"""
+        if custom_path and os.path.exists(custom_path):
+            return custom_path
+
+        candidates = []
+        for user_dir in self._candidate_user_dirs():
+            candidates.extend([
+                os.path.join(user_dir, "OpenAI Settings"),
+                os.path.join(user_dir, "presets"),
+            ])
+
+        for root in self._candidate_roots():
+            candidates.extend([
+                os.path.join(root, "OpenAI Settings"),
+                os.path.join(root, "presets"),
+                os.path.join(root, "public", "presets"),
+            ])
+
+        return self._first_existing_path(candidates, want_dir=True)
+
+    def get_regex_dir(self, custom_path: Optional[str] = None) -> Optional[str]:
+        """获取 SillyTavern 正则脚本目录路径"""
+        if custom_path and os.path.exists(custom_path):
+            return custom_path
+
+        candidates = []
+        for user_dir in self._candidate_user_dirs():
+            candidates.append(os.path.join(user_dir, "regex"))
+
+        for root in self._candidate_roots():
+            candidates.extend([
+                os.path.join(root, "regex"),
+                os.path.join(root, "public", "scripts", "regex"),
+            ])
+
+        return self._first_existing_path(candidates, want_dir=True)
     
     # ==================== 连接测试 ====================
     
@@ -153,7 +304,12 @@ class STClient:
             for res_type in ST_DATA_STRUCTURE.keys():
                 if res_type == "settings":
                     continue
-                subdir = self.get_st_subdir(res_type)
+                if res_type == "presets":
+                    subdir = self.get_presets_dir()
+                elif res_type == "regex":
+                    subdir = self.get_regex_dir()
+                else:
+                    subdir = self.get_st_subdir(res_type)
                 if subdir:
                     try:
                         count = len([f for f in os.listdir(subdir) 
@@ -427,7 +583,7 @@ class STClient:
     
     def _list_presets_local(self) -> List[Dict[str, Any]]:
         """从本地文件系统读取预设列表"""
-        presets_dir = self.get_st_subdir("presets")
+        presets_dir = self.get_presets_dir()
         if not presets_dir:
             logger.warning("未找到预设目录")
             return []
@@ -441,6 +597,8 @@ class STClient:
                 filepath = os.path.join(presets_dir, filename)
                 with open(filepath, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                
+                regexes = extract_regex_from_preset_data(data)
                     
                 preset_id = filename.replace('.json', '')
                 presets.append({
@@ -450,6 +608,8 @@ class STClient:
                     "description": data.get("description", data.get("note", "")),
                     "temperature": data.get("temperature"),
                     "max_tokens": data.get("max_tokens", data.get("openai_max_tokens")),
+                    "regex_count": len(regexes),
+                    "regexes": regexes,
                     "filepath": filepath,
                 })
             except Exception as e:
@@ -478,11 +638,29 @@ class STClient:
     
     def list_regex_scripts(self, use_api: bool = False) -> List[Dict[str, Any]]:
         """列出所有正则脚本"""
+        if use_api:
+            return self._list_regex_scripts_api()
         return self._list_regex_scripts_local()
+
+    def _list_regex_scripts_api(self) -> List[Dict[str, Any]]:
+        """通过 API 读取正则脚本列表（若支持 st-api-wrapper）"""
+        try:
+            resp = requests.post(
+                f"{self.st_url}/api/st-api/regex/list",
+                json={},
+                timeout=self.timeout,
+                auth=(self.st_username, self.st_password) if self.st_username else None
+            )
+            if resp.ok:
+                data = resp.json()
+                return data.get("scripts", []) or data.get("regexScripts", []) or []
+        except Exception as e:
+            logger.debug(f"获取正则脚本列表失败(API): {e}")
+        return []
     
     def _list_regex_scripts_local(self) -> List[Dict[str, Any]]:
         """从本地文件系统读取正则脚本列表"""
-        regex_dir = self.get_st_subdir("regex")
+        regex_dir = self.get_regex_dir()
         if not regex_dir:
             logger.warning("未找到正则脚本目录")
             return []
@@ -519,6 +697,67 @@ class STClient:
     def list_quick_replies(self, use_api: bool = False) -> List[Dict[str, Any]]:
         """列出所有快速回复"""
         return self._list_quick_replies_local()
+
+    # ==================== 全局正则读取 ====================
+
+    def get_global_regex(self, settings_path: Optional[str] = None) -> Dict[str, Any]:
+        """
+        读取 settings.json 中的全局 regex 规则
+        Returns: { path, regexes, count, error? }
+        """
+        path = self.get_settings_path(settings_path)
+        if not path:
+            return {"path": None, "regexes": [], "count": 0}
+
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            regexes = extract_global_regex_from_settings(raw)
+            return {"path": path, "regexes": regexes, "count": len(regexes)}
+        except Exception as e:
+            logger.warning(f"读取全局正则失败: {e}")
+            return {"path": path, "regexes": [], "count": 0, "error": str(e)}
+
+    def aggregate_regex(self, presets_path: Optional[str] = None, settings_path: Optional[str] = None) -> Dict[str, Any]:
+        """
+        汇总全局正则 + 预设绑定正则
+        Returns: { global, presets, stats }
+        """
+        presets_dir = presets_path or self.get_presets_dir()
+        preset_sets = []
+
+        if presets_dir and os.path.exists(presets_dir):
+            for filename in os.listdir(presets_dir):
+                if not filename.lower().endswith('.json'):
+                    continue
+                file_path = os.path.join(presets_dir, filename)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        raw = json.load(f)
+                    regexes = extract_regex_from_preset_data(raw)
+                    if regexes:
+                        preset_id = os.path.splitext(filename)[0]
+                        preset_sets.append({
+                            "presetId": preset_id,
+                            "presetName": raw.get("name") or raw.get("title") or preset_id,
+                            "regexes": regexes,
+                            "regexCount": len(regexes)
+                        })
+                except Exception as e:
+                    logger.warning(f"读取预设正则失败 {filename}: {e}")
+
+        global_regex = self.get_global_regex(settings_path)
+        preset_rule_count = sum(p.get("regexCount", 0) for p in preset_sets)
+
+        return {
+            "global": global_regex,
+            "presets": preset_sets,
+            "stats": {
+                "presetGroups": len(preset_sets),
+                "presetRules": preset_rule_count,
+                "total": (global_regex.get("count") or 0) + preset_rule_count
+            }
+        }
     
     def _list_quick_replies_local(self) -> List[Dict[str, Any]]:
         """从本地文件系统读取快速回复列表"""

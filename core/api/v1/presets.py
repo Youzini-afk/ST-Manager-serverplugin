@@ -8,9 +8,34 @@ import logging
 from flask import Blueprint, request, jsonify
 from core.config import BASE_DIR, load_config
 from core.utils.filesystem import sanitize_filename
+from core.utils.regex import extract_regex_from_preset_data
 
 logger = logging.getLogger(__name__)
 bp = Blueprint('presets', __name__)
+
+def _safe_join(base_dir: str, rel_path: str) -> str:
+    """在 base_dir 下安全拼接相对路径，返回绝对路径；不安全则返回空字符串"""
+    if not rel_path:
+        return ""
+    rel_path = str(rel_path).strip()
+    if rel_path == "":
+        return ""
+    if os.path.isabs(rel_path):
+        return ""
+    drive, _ = os.path.splitdrive(rel_path)
+    if drive:
+        return ""
+    rel_norm = os.path.normpath(rel_path).replace('\\', '/')
+    if rel_norm == '.' or rel_norm.startswith('../') or rel_norm == '..' or '/..' in f'/{rel_norm}':
+        return ""
+    base_abs = os.path.abspath(base_dir)
+    full_abs = os.path.abspath(os.path.join(base_abs, rel_norm))
+    try:
+        if os.path.commonpath([full_abs, base_abs]) != base_abs:
+            return ""
+    except Exception:
+        return ""
+    return full_abs
 
 
 def _get_presets_path():
@@ -34,50 +59,7 @@ def _extract_regex_from_preset(data):
     从预设数据中提取绑定的正则脚本
     参考 st-external-bridge 的 preset-manager.js
     """
-    regexes = []
-    seen = set()
-    
-    def merge_regex(items):
-        if not items:
-            return
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            # 生成唯一键防重复
-            key = (
-                item.get('scriptName') or item.get('name') or '',
-                item.get('findRegex') or item.get('pattern') or ''
-            )
-            if key in seen:
-                continue
-            seen.add(key)
-            
-            regexes.append({
-                'name': item.get('scriptName') or item.get('name') or 'Unnamed',
-                'description': item.get('description') or '',
-                'pattern': item.get('findRegex') or item.get('pattern') or '',
-                'replace': item.get('replaceString') or item.get('replace') or '',
-                'flags': item.get('flags') or '',
-                'enabled': item.get('disabled') != True,
-                'scope': item.get('placement') or [],
-            })
-    
-    # 支持多种格式
-    # 1. regex_scripts 数组 (SillyTavern 预设格式)
-    if 'regex_scripts' in data:
-        merge_regex(data['regex_scripts'])
-    
-    # 2. regexScripts 数组
-    if 'regexScripts' in data:
-        merge_regex(data['regexScripts'])
-    
-    # 3. prompts 中嵌入的 regex
-    if 'prompts' in data and isinstance(data['prompts'], list):
-        for prompt in data['prompts']:
-            if isinstance(prompt, dict) and 'regex' in prompt:
-                merge_regex([prompt['regex']] if isinstance(prompt['regex'], dict) else prompt['regex'])
-    
-    return regexes
+    return extract_regex_from_preset_data(data)
 
 
 def _parse_preset_file(file_path, filename):
@@ -280,13 +262,20 @@ def get_preset_detail(preset_id):
             _, folder, name = parts
             cfg = load_config()
             res_root = os.path.join(BASE_DIR, cfg.get('resources_dir', 'data/assets/card_assets'))
-            file_path = os.path.join(res_root, folder, 'presets', f"{name}.json")
+            folder_abs = _safe_join(res_root, folder)
+            if not folder_abs:
+                return jsonify({"success": False, "msg": "Invalid preset ID"}), 400
+            presets_base = os.path.join(folder_abs, 'presets')
+            file_path = _safe_join(presets_base, f"{name}.json")
             preset_type = 'resource'
             source_folder = folder
         else:
-            file_path = os.path.join(presets_root, f"{preset_id}.json")
+            file_path = _safe_join(presets_root, f"{preset_id}.json")
             preset_type = 'global'
             source_folder = None
+        
+        if not file_path:
+            return jsonify({"success": False, "msg": "Invalid preset ID"}), 400
         
         if not os.path.exists(file_path):
             return jsonify({"success": False, "msg": "Preset not found"}), 404
@@ -409,9 +398,16 @@ def delete_preset():
             _, folder, name = parts
             cfg = load_config()
             res_root = os.path.join(BASE_DIR, cfg.get('resources_dir', 'data/assets/card_assets'))
-            file_path = os.path.join(res_root, folder, 'presets', f"{name}.json")
+            folder_abs = _safe_join(res_root, folder)
+            if not folder_abs:
+                return jsonify({"success": False, "msg": "Invalid preset ID"}), 400
+            presets_base = os.path.join(folder_abs, 'presets')
+            file_path = _safe_join(presets_base, f"{name}.json")
         else:
-            file_path = os.path.join(presets_root, f"{preset_id}.json")
+            file_path = _safe_join(presets_root, f"{preset_id}.json")
+        
+        if not file_path:
+            return jsonify({"success": False, "msg": "Invalid preset ID"}), 400
         
         if not os.path.exists(file_path):
             return jsonify({"success": False, "msg": "预设文件不存在"})
@@ -449,9 +445,16 @@ def save_preset():
             _, folder, name = parts
             cfg = load_config()
             res_root = os.path.join(BASE_DIR, cfg.get('resources_dir', 'data/assets/card_assets'))
-            file_path = os.path.join(res_root, folder, 'presets', f"{name}.json")
+            folder_abs = _safe_join(res_root, folder)
+            if not folder_abs:
+                return jsonify({"success": False, "msg": "Invalid preset ID"}), 400
+            presets_base = os.path.join(folder_abs, 'presets')
+            file_path = _safe_join(presets_base, f"{name}.json")
         else:
-            file_path = os.path.join(presets_root, f"{preset_id}.json")
+            file_path = _safe_join(presets_root, f"{preset_id}.json")
+        
+        if not file_path:
+            return jsonify({"success": False, "msg": "Invalid preset ID"}), 400
         
         # 确保目录存在
         os.makedirs(os.path.dirname(file_path), exist_ok=True)

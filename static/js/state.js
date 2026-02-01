@@ -106,6 +106,10 @@ export function initState() {
             bg_opacity: 0.95, 
             bg_blur: 0,
             favorites_first: false,
+            png_deterministic_sort: false,
+            allowed_abs_resource_roots: [],
+            wi_preview_limit: 300,
+            wi_preview_entry_max_chars: 2000,
         },
 
         // === 集中管理的视图状态 ===
@@ -191,8 +195,15 @@ export function initState() {
                     const localPerPage = localStorage.getItem('st_manager_per_page');
                     const localPerPageWi = localStorage.getItem('st_manager_per_page_wi');
                     
+                    const normalizedRoots = Array.isArray(settings.allowed_abs_resource_roots)
+                        ? settings.allowed_abs_resource_roots
+                        : (typeof settings.allowed_abs_resource_roots === 'string'
+                            ? settings.allowed_abs_resource_roots.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean)
+                            : []);
+
                     this.settingsForm = {
                         ...settings,
+                        allowed_abs_resource_roots: normalizedRoots,
                         default_sort: localSort || settings.default_sort || 'date_desc',
                         st_auth_type: settings.st_auth_type || 'basic',
                         st_proxy: settings.st_proxy || '',
