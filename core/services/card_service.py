@@ -491,41 +491,112 @@ def swap_skin_to_cover(card_id, skin_filename, save_old_to_resource=False):
     try:
         # 打开皮肤图片
         img = Image.open(skin_path)
- 
-        # 先保存皮肤像素到目标，再写入 Meta
-        # 为了原子性写入临时文件
-        temp_target = card_full_path + ".tmp.png"
         
-        # 构造 PngInfo
+        # 判断卡片类型
+        is_json_card = card_full_path.lower().endswith('.json')
+        
+        # 构造 PngInfo（两种格式都需要）
         from PIL import PngImagePlugin
         meta = PngImagePlugin.PngInfo()
-        # 序列化当前数据
-        import json, base64
-        # 使用工具函数确保 V3 标准化
+        import json as json_lib, base64
         from core.utils.data import normalize_card_v3, deterministic_sort
         norm_data = normalize_card_v3(current_info)
         sorted_data = deterministic_sort(norm_data)
-        chara_str = base64.b64encode(json.dumps(sorted_data).encode('utf-8')).decode('utf-8')
+        chara_str = base64.b64encode(json_lib.dumps(sorted_data).encode('utf-8')).decode('utf-8')
         meta.add_text('chara', chara_str)
         
-        img.save(temp_target, "PNG", pnginfo=meta)
-        
-        # 替换
-        os.replace(temp_target, card_full_path)
-        
-        # 更新数据库缓存 (Hash变了，但Meta没变，更新Hash和Size)
-        from core.services.cache_service import update_card_cache
-        from core.utils.hash import get_file_hash_and_size
-        
-        f_hash, f_size = get_file_hash_and_size(card_full_path)
-        update_card_cache(card_id, card_full_path, file_hash=f_hash, file_size=f_size)
-        
-        # 清理缩略图
-        from core.utils.image import clean_thumbnail_cache
-        from core.config import THUMB_FOLDER
-        clean_thumbnail_cache(card_id, THUMB_FOLDER)
-        
-        return {"success": True, "new_hash": f_hash}
+        if is_json_card:
+            # JSON 格式角色卡：转换为 PNG 格式
+            # 5.1 准备新的 PNG 文件路径
+            base_path = os.path.splitext(card_full_path)[0]
+            new_full_path = base_path + '.png'
+            new_filename = os.path.basename(new_full_path)
+            new_card_id = card_id.rsplit('.', 1)[0] + '.png'
+            
+            # 5.2 归档旧封面（如果有伴生图片的话）- 必须在删除前执行
+            if save_old_to_resource:
+                old_sidecar = find_sidecar_image(card_full_path)
+                if old_sidecar:
+                    if not os.path.exists(res_dir_path):
+                        os.makedirs(res_dir_path)
+                    timestamp = int(time.time())
+                    old_ext = os.path.splitext(old_sidecar)[1]
+                    archive_name = f"prev_cover_{timestamp}{old_ext}"
+                    shutil.copy2(old_sidecar, os.path.join(res_dir_path, archive_name))
+            
+            # 5.3 删除原 JSON 文件和所有伴生图片（先清理，再保存新文件）
+            # 注意：clean_sidecar_images 会删除 base_name.* 的所有图片
+            # 所以必须在保存新 PNG 之前执行，否则会把新文件也删掉
+            clean_sidecar_images(card_full_path)  # 删除所有伴生图片
+            if os.path.exists(card_full_path):
+                os.remove(card_full_path)  # 删除原 JSON 文件
+            
+            # 5.4 保存新的 PNG 文件（包含元数据）
+            temp_target = new_full_path + ".tmp.png"
+            img.save(temp_target, "PNG", pnginfo=meta)
+            os.replace(temp_target, new_full_path)
+            
+            # 5.5 更新数据库中的卡片 ID（从 .json 改为 .png）
+            old_category = ""
+            if ctx.cache and card_id in ctx.cache.id_map:
+                old_category = ctx.cache.id_map[card_id].get('category', "")
+            elif '/' in card_id:
+                old_category = card_id.rsplit('/', 1)[0]
+            
+            conn = get_db()
+            conn.execute(
+                "UPDATE card_metadata SET id = ?, category = ? WHERE id = ?",
+                (new_card_id, old_category, card_id)
+            )
+            conn.commit()
+            
+            # 5.6 更新 UI Data 中的 key
+            ui_data = load_ui_data()
+            ui_changed = False
+            if card_id in ui_data:
+                ui_data[new_card_id] = ui_data[card_id]
+                del ui_data[card_id]
+                ui_changed = True
+            if ui_changed:
+                save_ui_data(ui_data)
+            
+            # 5.7 更新缓存
+            if ctx.cache:
+                ctx.cache.move_card_update(card_id, new_card_id, old_category, old_category, new_filename, new_full_path)
+            
+            # 5.8 计算新文件的 hash
+            f_hash, f_size = get_file_hash_and_size(new_full_path)
+            
+            # 5.9 清理旧 card_id 的缩略图，以及准备新 card_id 的缩略图
+            clean_thumbnail_cache(card_id, THUMB_FOLDER)
+            clean_thumbnail_cache(new_card_id, THUMB_FOLDER)
+            
+            return {
+                "success": True, 
+                "new_hash": f_hash,
+                "new_card_id": new_card_id,
+                "converted_to_png": True
+            }
+            
+        else:
+            # PNG 格式角色卡：传统方式，替换原文件并嵌入元数据
+            # 先保存皮肤像素到目标，再写入 Meta
+            # 为了原子性写入临时文件
+            temp_target = card_full_path + ".tmp.png"
+            
+            img.save(temp_target, "PNG", pnginfo=meta)
+            
+            # 替换
+            os.replace(temp_target, card_full_path)
+            
+            # 更新数据库缓存 (Hash变了，但Meta没变，更新Hash和Size)
+            f_hash, f_size = get_file_hash_and_size(card_full_path)
+            update_card_cache(card_id, card_full_path, file_hash=f_hash, file_size=f_size)
+            
+            # 清理缩略图
+            clean_thumbnail_cache(card_id, THUMB_FOLDER)
+            
+            return {"success": True, "new_hash": f_hash}
         
     except Exception as e:
         return {"success": False, "msg": str(e)}
