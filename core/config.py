@@ -46,6 +46,7 @@ DEFAULT_CONFIG = {
     "port": 5000,
     "resources_dir": "data/assets/card_assets",
     "st_url": "http://127.0.0.1:8000",
+    "st_data_dir": "",  # SillyTavern 安装目录，留空则自动探测
     "st_auth_type": "basic",  # 'basic' or 'web'
     "st_username": "",
     "st_password": "",
