@@ -31,6 +31,7 @@ import moveCardsModal from './components/moveCardsModal.js';
 import executeRulesMobileModal from './components/executeRulesMobileModal.js';
 import extensionGrid from './components/extensionGrid.js';
 import presetGrid from './components/presetGrid.js';
+import presetDetailReader from './components/presetDetailReader.js';
 
 // 3. 监听 Alpine 初始化事件
 const registerComponents = () => {
@@ -63,6 +64,7 @@ const registerComponents = () => {
     Alpine.data('executeRulesMobileModal', executeRulesMobileModal);
     Alpine.data('extensionGrid', extensionGrid);
     Alpine.data('presetGrid', presetGrid);
+    Alpine.data('presetDetailReader', presetDetailReader);
 
     console.log("✅ ST Manager Frontend: Modules Loaded & Alpine Initialized");
 };

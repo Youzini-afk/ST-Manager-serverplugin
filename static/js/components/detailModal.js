@@ -253,30 +253,29 @@ export default function detailModal() {
             // fileItem 是 API 返回的对象: { name: "abc.json", path: "data/..." }
             if (!fileItem || !fileItem.path) return;
 
-            this.$store.global.isLoading = true;
-
-            // 1. 读取文件内容
-            readFileContent({ path: fileItem.path }).then(res => {
-                this.$store.global.isLoading = false;
+            // 解析路径生成正确的预设 ID 格式: resource::folder::name
+            // 路径格式: data/assets/card_assets/folder/presets/name.json
+            const pathParts = fileItem.path.replace(/\\/g, '/').split('/');
+            const presetsIndex = pathParts.indexOf('presets');
+            
+            if (presetsIndex > 0) {
+                // 获取文件夹名称 (在 presets 的父目录)
+                const folderName = pathParts[presetsIndex - 1];
+                // 获取预设名称 (去掉 .json 后缀)
+                const presetName = fileItem.name.replace(/\.json$/i, '');
+                const presetId = `resource::${folderName}::${presetName}`;
                 
-                if (res.success) {
-                    const fileContent = res.data;
-                    
-                    // 2. 触发事件打开预设详情
-                    window.dispatchEvent(new CustomEvent('open-preset-detail', {
-                        detail: {
-                            presetData: fileContent,
-                            filePath: fileItem.path,
-                            source: 'resource'
-                        }
-                    }));
-                } else {
-                    alert("无法读取文件内容: " + res.msg);
-                }
-            }).catch(err => {
-                this.$store.global.isLoading = false;
-                alert("读取请求失败: " + err);
-            });
+                // 触发打开预设阅览界面事件
+                window.dispatchEvent(new CustomEvent('open-preset-reader', {
+                    detail: {
+                        id: presetId,
+                        name: fileItem.name,
+                        source: 'resource'
+                    }
+                }));
+            } else {
+                alert("无效的预设文件路径");
+            }
         },
 
         // 删除当前选中的皮肤

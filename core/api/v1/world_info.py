@@ -505,6 +505,11 @@ def api_get_world_info_detail():
         global_dir = _resolve_wi_dir(cfg)
         resources_dir = _resolve_resources_dir(cfg)
 
+        # 处理相对路径：如果是相对路径，基于 BASE_DIR 转换为绝对路径
+        if not os.path.isabs(file_path):
+            file_path = os.path.join(BASE_DIR, file_path)
+            file_path = os.path.normpath(file_path)
+
         # 仅允许访问世界书相关目录
         if source_type == 'global':
             if not _is_under_base(file_path, global_dir):

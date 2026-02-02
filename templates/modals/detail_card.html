@@ -1149,7 +1149,7 @@
                                                 <div class="p-2 space-y-1">
                                                     <template x-for="file in resourceLorebooks" :key="file.path">
                                                         <div class="flex items-center justify-between p-2 rounded border border-transparent hover:border-[var(--border-light)] hover:bg-[var(--bg-hover)] cursor-pointer group transition-colors"
-                                                            @click="window.dispatchEvent(new CustomEvent('open-wi-file', { detail: { id: file.path, source_type: 'resource', file_path: file.path, name: file.name } }))">
+                                                            @click="window.dispatchEvent(new CustomEvent('open-wi-detail-modal', { detail: { id: file.path, type: 'resource', path: file.path, name: file.name, mtime: file.mtime } }))">
                                                             <div class="flex items-center gap-2 min-w-0">
                                                                 <span class="text-orange-400 text-sm">📘</span>
                                                                 <span class="text-xs text-[var(--text-main)] truncate"

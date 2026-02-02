@@ -1,11 +1,12 @@
 <!-- 预设详情阅览界面 (Preset Detail Reader Modal) -->
-<div x-show="showPresetDetailModal" x-cloak class="modal-overlay z-modal-std flex items-center justify-center p-4"
-    @click.self="closePresetDetailModal()">
+<div x-show="showModal" x-cloak class="modal-overlay z-modal-std flex items-center justify-center p-4"
+    @click.self="closeModal()"
+    x-data="presetDetailReader()">
 
     <!-- 定义内部 Tab 状态 -->
     <div class="preset-reader-modal bg-[var(--bg-panel)] border border-[var(--border-light)] rounded-xl shadow-2xl
               flex flex-col w-full max-w-7xl h-[90vh] overflow-hidden relative animate-scale-in"
-        x-data="{ sidebarTab: 'samplers' }">
+        >
 
         <!-- 1. 顶部工具栏 -->
         <div
@@ -32,11 +33,11 @@
 
             <!-- 操作按钮组 -->
             <div class="flex items-center gap-2">
-                <button @click="editPresetRawFromDetail()"
+                <button @click="editRaw()"
                     class="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5" title="编辑源文件">
                     <span>✏️</span> <span class="hidden sm:inline">JSON</span>
                 </button>
-                <button @click="closePresetDetailModal()"
+                <button @click="closeModal()"
                     class="text-[var(--text-dim)] hover:text-red-400 p-2 rounded-full hover:bg-[var(--bg-body)] transition-colors">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -351,25 +352,3 @@
         </div>
     </div>
 </div>
-
-<script>
-    // 辅助函数：根据 Key 获取图标
-    function getPromptIcon(key) {
-        const map = {
-            'worldInfoBefore': '🌍', 'worldInfoAfter': '🌍',
-            'charDescription': '👤', 'charPersonality': '🧠', 'personaDescription': '🎭',
-            'scenario': '🏰',
-            'chatHistory': '🕒', 'dialogueExamples': '💬',
-            'main': '📜', 'jailbreak': '🔓'
-        };
-        return map[key] || '📌';
-    }
-
-    // 辅助函数：从 Meta 或 Prompt 对象中提取 Role
-    function getPromptRole(prompt) {
-        // 尝试从 meta 字符串数组中解析 role: system
-        const roleMeta = prompt.meta.find(m => m.startsWith('role:'));
-        if (roleMeta) return roleMeta.split(':')[1].trim();
-        return 'system'; // 默认为 system
-    }
-</script>

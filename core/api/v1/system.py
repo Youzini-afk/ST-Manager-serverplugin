@@ -593,6 +593,12 @@ def api_restore_backup():
 def api_read_file_content():
     try:
         path = request.json.get('path')
+        
+        # 处理相对路径：如果是相对路径，基于 BASE_DIR 转换为绝对路径
+        if not os.path.isabs(path):
+            path = os.path.join(BASE_DIR, path)
+            path = os.path.normpath(path)
+        
         if not os.path.exists(path): return jsonify({"success": False})
         
         # 如果是图片，提取元数据；如果是JSON，直接读

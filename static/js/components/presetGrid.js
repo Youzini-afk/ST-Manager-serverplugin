@@ -46,6 +46,11 @@ export default function presetGrid() {
             if (this.$store.global.currentMode === 'presets') {
                 this.fetchItems();
             }
+
+            // 监听从资源目录打开预设的事件
+            window.addEventListener('open-preset-reader', (e) => {
+                this.openPresetDetail(e.detail);
+            });
         },
 
         fetchItems() {
