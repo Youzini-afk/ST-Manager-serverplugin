@@ -501,4 +501,6 @@ module.exports = {
     saveConfig: update,  // 别名，兼容 API 调用
     ensureDir,
     getFullPath,
+    resolveUserDataDir,
+    findUserDirFromDataDir,
 };

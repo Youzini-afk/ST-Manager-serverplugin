@@ -7,10 +7,248 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { execSync, exec } = require('child_process');
 
 // 导入核心模块
 let cards, worldInfo, presets, extensions, automation, backup, config, regex, resources;
+
+// ============ ST 本地路径探测/校验 ============
+
+function _safeStat(p) {
+    try {
+        return fs.statSync(p);
+    } catch (e) {
+        return null;
+    }
+}
+
+function _isDir(p) {
+    const stat = _safeStat(p);
+    return stat ? stat.isDirectory() : false;
+}
+
+function _isFile(p) {
+    const stat = _safeStat(p);
+    return stat ? stat.isFile() : false;
+}
+
+function _expandUserPath(inputPath) {
+    if (!inputPath) return '';
+    let expanded = inputPath;
+    const username = process.env.USERNAME || process.env.USER || '';
+    expanded = expanded.replace('{user}', username);
+    if (expanded.startsWith('~')) {
+        expanded = path.join(os.homedir(), expanded.slice(1));
+    }
+    return expanded;
+}
+
+function _normalizeInputPath(inputPath) {
+    if (typeof inputPath !== 'string') return '';
+    let cleaned = inputPath.trim();
+    if (!cleaned) return '';
+    if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+        cleaned = cleaned.slice(1, -1);
+    }
+    cleaned = _expandUserPath(cleaned);
+    return path.resolve(path.normalize(cleaned));
+}
+
+function _normalizeStRoot(inputPath) {
+    if (!inputPath) return '';
+    let normalized = path.normalize(inputPath);
+    if (_isFile(normalized)) {
+        normalized = path.dirname(normalized);
+    }
+
+    const parts = normalized.split(path.sep);
+    const lowerParts = parts.map(p => p.toLowerCase());
+    const root = path.parse(normalized).root;
+
+    if (lowerParts.length && lowerParts[lowerParts.length - 1] === 'public') {
+        return path.dirname(normalized) || normalized;
+    }
+
+    if (lowerParts.includes('data')) {
+        let dataIdx = -1;
+        for (let i = lowerParts.length - 1; i >= 0; i--) {
+            if (lowerParts[i] === 'data') {
+                dataIdx = i;
+                break;
+            }
+        }
+        if (dataIdx >= 0) {
+            const base = path.join(root, ...parts.slice(1, dataIdx));
+            if (base) return base;
+        }
+    }
+
+    if (lowerParts.length && lowerParts[lowerParts.length - 1] === 'default-user') {
+        const parent = path.dirname(normalized);
+        if (path.basename(parent).toLowerCase() === 'data') {
+            return path.dirname(parent) || normalized;
+        }
+        return parent || normalized;
+    }
+
+    return normalized;
+}
+
+function _validateStPath(inputPath) {
+    if (!inputPath || !fs.existsSync(inputPath)) return false;
+    const normalized = path.normalize(inputPath);
+
+    const indicators = [
+        path.join(normalized, 'data'),
+        path.join(normalized, 'data', 'default-user'),
+        path.join(normalized, 'public'),
+        path.join(normalized, 'server.js'),
+        path.join(normalized, 'start.sh'),
+        path.join(normalized, 'Start.bat'),
+        path.join(normalized, 'package.json'),
+        path.join(normalized, 'config.yaml'),
+        path.join(normalized, 'settings.json'),
+        path.join(normalized, 'characters'),
+        path.join(normalized, 'worlds'),
+    ];
+    if (indicators.some(p => fs.existsSync(p))) return true;
+
+    try {
+        if (path.basename(normalized).toLowerCase() === 'default-user') {
+            return true;
+        }
+    } catch (e) {
+        return false;
+    }
+
+    let dataDir = normalized;
+    if (path.basename(normalized).toLowerCase() !== 'data') {
+        dataDir = path.join(normalized, 'data');
+    }
+    if (_isDir(dataDir)) {
+        try {
+            const entries = fs.readdirSync(dataDir);
+            for (const entry of entries) {
+                const entryPath = path.join(dataDir, entry);
+                if (!_isDir(entryPath)) continue;
+                if (fs.existsSync(path.join(entryPath, 'settings.json'))) return true;
+                if (fs.existsSync(path.join(entryPath, 'characters')) || fs.existsSync(path.join(entryPath, 'worlds'))) {
+                    return true;
+                }
+            }
+        } catch (e) {
+            return false;
+        }
+    }
+    return false;
+}
+
+function _countFiles(dir, exts) {
+    if (!_isDir(dir)) return 0;
+    const allow = (exts || []).map(e => e.toLowerCase());
+    let count = 0;
+    try {
+        const files = fs.readdirSync(dir);
+        for (const f of files) {
+            const fullPath = path.join(dir, f);
+            const stat = _safeStat(fullPath);
+            if (!stat || !stat.isFile()) continue;
+            const ext = path.extname(f).toLowerCase();
+            if (!allow.length || allow.includes(ext)) {
+                count += 1;
+            }
+        }
+    } catch (e) {
+        return 0;
+    }
+    return count;
+}
+
+function _getPresetsDirFromUserDir(userDir) {
+    if (!userDir) return null;
+    const candidates = [
+        path.join(userDir, 'OpenAI Settings'),
+        path.join(userDir, 'presets'),
+        path.join(userDir, 'TextGen Settings'),
+    ];
+    for (const p of candidates) {
+        if (_isDir(p)) return p;
+    }
+    return null;
+}
+
+function _getRegexDirFromUserDir(userDir) {
+    if (!userDir) return null;
+    const candidates = [
+        path.join(userDir, 'regex'),
+        path.join(userDir, 'scripts', 'extensions', 'regex'),
+        path.join(userDir, 'extensions', 'regex'),
+    ];
+    for (const p of candidates) {
+        if (_isDir(p)) return p;
+    }
+    return null;
+}
+
+function _getSettingsPathFromUserDir(userDir) {
+    if (!userDir) return null;
+    const candidate = path.join(userDir, 'settings.json');
+    return _isFile(candidate) ? candidate : null;
+}
+
+function _collectStResources(userDir) {
+    const resources = {};
+    if (!userDir) return resources;
+
+    const charactersDir = path.join(userDir, 'characters');
+    resources.characters = {
+        path: charactersDir,
+        count: _countFiles(charactersDir, ['.png', '.json']),
+    };
+
+    const worldsDir = path.join(userDir, 'worlds');
+    resources.worlds = {
+        path: worldsDir,
+        count: _countFiles(worldsDir, ['.json']),
+    };
+
+    const presetsDir = _getPresetsDirFromUserDir(userDir);
+    resources.presets = {
+        path: presetsDir,
+        count: _countFiles(presetsDir, ['.json']),
+    };
+
+    const quickRepliesDir = path.join(userDir, 'QuickReplies');
+    resources.quick_replies = {
+        path: quickRepliesDir,
+        count: _countFiles(quickRepliesDir, ['.json']),
+    };
+
+    const regexDir = _getRegexDirFromUserDir(userDir);
+    const scriptCount = _countFiles(regexDir, ['.json']);
+    let globalCount = 0;
+    let settingsPath = _getSettingsPathFromUserDir(userDir);
+    if (settingsPath) {
+        try {
+            const raw = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+            const items = regex && regex.extractGlobalRegexFromSettings
+                ? regex.extractGlobalRegexFromSettings(raw)
+                : [];
+            globalCount = Array.isArray(items) ? items.length : 0;
+        } catch (e) {
+            globalCount = 0;
+        }
+    }
+    resources.regex = {
+        path: regexDir || settingsPath,
+        count: scriptCount + globalCount,
+        script_count: scriptCount,
+        global_count: globalCount,
+    };
+
+    return resources;
+}
 
 /**
  * 初始化 API 模块
@@ -607,6 +845,100 @@ function registerRoutes(app, staticDir) {
         } catch (e) {
             res.json({ success: false, error: e.message, items: [], total: 0 });
         }
+    });
+
+    // ============ SillyTavern 本地目录探测/验证 ============
+
+    // 自动探测 SillyTavern 安装路径
+    app.get('/api/st/detect_path', (req, res) => {
+        try {
+            const cfg = config ? config.getConfig() : {};
+            const candidates = [];
+            if (cfg && cfg.st_data_dir) candidates.push(cfg.st_data_dir);
+            if (config && config.getStRoot) candidates.push(config.getStRoot());
+            candidates.push(process.cwd());
+
+            const username = process.env.USERNAME || process.env.USER || '';
+            const common = [
+                'D:\\\\SillyTavern',
+                'E:\\\\SillyTavern',
+                'C:\\\\SillyTavern',
+                'D:\\\\Programs\\\\SillyTavern',
+                'E:\\\\Programs\\\\SillyTavern',
+                `C:\\\\Users\\\\${username}\\\\SillyTavern`,
+                '/opt/SillyTavern',
+                '~/SillyTavern',
+                `/home/${username}/SillyTavern`,
+            ];
+            candidates.push(...common);
+
+            let found = null;
+            for (const raw of candidates) {
+                if (!raw) continue;
+                const normalized = _normalizeInputPath(raw);
+                if (!normalized) continue;
+                if (_validateStPath(normalized)) {
+                    found = _normalizeStRoot(normalized);
+                    break;
+                }
+            }
+
+            if (found) {
+                res.json({ success: true, path: found, valid: true });
+            } else {
+                res.json({
+                    success: true,
+                    path: null,
+                    valid: false,
+                    message: '未能自动探测到 SillyTavern 安装路径，请手动配置',
+                });
+            }
+        } catch (e) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    // 验证指定路径是否有效
+    app.post('/api/st/validate_path', (req, res) => {
+        try {
+            const rawPath = (req.body || {}).path;
+            const normalizedInput = _normalizeInputPath(rawPath);
+            if (!normalizedInput) {
+                return res.status(400).json({ success: false, error: '请提供路径' });
+            }
+
+            const isValid = _validateStPath(normalizedInput);
+            let normalizedRoot = isValid ? _normalizeStRoot(normalizedInput) : normalizedInput;
+            if (normalizedRoot && !fs.existsSync(normalizedRoot)) {
+                normalizedRoot = normalizedInput;
+            }
+
+            let resourcesInfo = {};
+            if (isValid) {
+                const userDir = config && config.resolveUserDataDir
+                    ? config.resolveUserDataDir(normalizedRoot)
+                    : null;
+                resourcesInfo = _collectStResources(userDir);
+            }
+
+            res.json({
+                success: true,
+                valid: isValid,
+                normalized_path: normalizedRoot,
+                resources: resourcesInfo,
+            });
+        } catch (e) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    // 资源同步（Web UI 仅做提示，真正同步需后端实现）
+    app.post('/api/st/sync', (req, res) => {
+        res.json({
+            success: false,
+            error: 'ST 同步功能尚未在服务端插件中实现',
+            result: { success: 0, failed: 0 },
+        });
     });
     
     // ============ 正则 API ============
