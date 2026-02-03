@@ -41,7 +41,28 @@ cd SillyTavern/plugins
 git clone https://github.com/Youzini-afk/ST-Manager-serverplugin.git
 ```
 
-#### 3. 重启 SillyTavern
+#### 3. 安装依赖
+
+**Windows (PowerShell):**
+```powershell
+cd ST-Manager-serverplugin
+.\install.ps1
+```
+
+**Linux/Mac:**
+```bash
+cd ST-Manager-serverplugin
+chmod +x install.sh
+./install.sh
+```
+
+或手动安装：
+```bash
+cd ST-Manager-serverplugin
+npm install
+```
+
+#### 4. 重启 SillyTavern
 
 重启后：
 - ✅ 服务端插件自动加载
@@ -58,10 +79,21 @@ git clone https://github.com/Youzini-afk/ST-Manager-serverplugin.git
 ═══════════════════════════════════════════════
 ```
 
-#### 4. 访问 Web UI
+#### 5. 访问 Web UI
 
 - **完整 Web UI**: http://localhost:5000 （功能完整的资源管理界面）
 - **酒馆扩展面板**: 在酒馆 Extensions 标签页中启用 ST Manager（精简版）
+
+---
+
+### 🔄 更新插件
+
+```bash
+cd SillyTavern/plugins/ST-Manager-serverplugin
+git pull
+npm install  # 更新依赖
+# 然后重启 SillyTavern
+```
 
 ---
 
