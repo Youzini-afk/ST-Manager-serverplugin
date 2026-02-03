@@ -400,11 +400,11 @@ function registerRoutes(app, staticDir) {
             // 转换为 Python 格式响应
             res.json({
                 success: true,
-                cards: result.cards || [],
+                cards: result.items || [],
                 total: result.total || 0,
                 page: result.page || 1,
                 page_size: result.pageSize || 50,
-                total_pages: result.totalPages || 1,
+                total_pages: Math.ceil((result.total || 0) / (result.pageSize || 50)) || 1,
                 categories: result.folders || [],
             });
         } catch (e) {
