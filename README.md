@@ -7,8 +7,12 @@ SillyTavern 资源管理与自动化工具 - 完整集成插件
 ### 📊 资源管理
 - **角色卡管理** - 浏览、搜索、编辑角色卡
 - **世界书管理** - 查看和管理世界书条目
-- **预设管理** - 管理 OpenAI 预设
-- **正则脚本** - 管理正则替换脚本
+- **预设管理** - 管理预设及其绑定正则
+- **正则脚本管理** - 完整的全局和预设绑定正则管理（重中之重）
+  - 全局正则提取（从 settings.json）
+  - 预设绑定正则提取
+  - 正则脚本文件管理
+  - 正则聚合与统计
 
 ### 💾 备份与恢复
 - **一键备份** - 支持全量和增量备份
@@ -56,7 +60,12 @@ st-manager/
 │   ├── index.js           # 入口文件
 │   └── modules/           # 功能模块
 │       ├── backup.js      # 备份模块
-│       ├── resources.js   # 资源管理
+│       ├── cards.js       # 角色卡管理
+│       ├── presets.js     # 预设管理
+│       ├── regex.js       # 正则脚本管理（NEW）
+│       ├── extensions.js  # 扩展管理
+│       ├── worldInfo.js   # 世界书管理
+│       ├── resources.js   # 资源聚合
 │       ├── automation.js  # 自动化规则
 │       └── config.js      # 配置管理
 └── client/                # 前端扩展
@@ -84,7 +93,17 @@ st-manager/
 | `/cards/list` | GET | 角色卡列表 |
 | `/worldbooks/list` | GET | 世界书列表 |
 | `/presets/list` | GET | 预设列表 |
-| `/regex/list` | GET | 正则脚本列表 |
+| `/presets/regex/:presetId` | GET | 预设绑定的正则 |
+
+### 正则脚本（全局与预设绑定）
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/regex/global` | GET | 获取全局正则（从 settings.json） |
+| `/regex/scripts` | GET | 列出正则脚本文件 |
+| `/regex/aggregate` | GET | 汇总全局 + 预设绑定正则 |
+| `/regex/extract-from-preset` | POST | 从预设数据提取正则 |
+| `/regex/list` | GET | 正则脚本列表（兼容路由） |
 
 ### 备份
 
@@ -108,6 +127,17 @@ st-manager/
 | `/automation/execute` | POST | 执行规则 |
 
 ## 🛠️ 开发
+
+### 模块说明
+
+**regex.js** - 正则脚本管理核心模块
+
+完整复刻 Python 后端的正则处理逻辑，支持：
+- 全局正则：从 `settings.json` 中提取各种格式的全局正则规则
+- 预设绑定正则：从预设文件中提取 `extensions.regex_scripts` 等字段
+- 正则标准化：支持多种格式的正则条目自动标准化
+- 正则去重：基于 pattern/flags/replace 的智能去重
+- 正则聚合：汇总全局 + 预设绑定的所有正则规则
 
 ### 构建前端
 

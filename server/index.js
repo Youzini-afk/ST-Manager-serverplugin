@@ -2,6 +2,7 @@
  * ST Manager - SillyTavern 资源管理与自动化工具
  * 
  * 服务端插件入口
+ * 完整复刻 Python 后端的全部功能
  */
 
 const fs = require('fs');
@@ -12,6 +13,11 @@ const backup = require('./modules/backup');
 const resources = require('./modules/resources');
 const automation = require('./modules/automation');
 const config = require('./modules/config');
+const extensions = require('./modules/extensions');
+const worldInfo = require('./modules/worldInfo');
+const cards = require('./modules/cards');
+const presets = require('./modules/presets');
+const regex = require('./modules/regex');
 
 // 插件信息
 const info = {
@@ -36,6 +42,7 @@ async function init(router) {
             status: 'ok',
             version: '2.0.0',
             timestamp: new Date().toISOString(),
+            features: ['cards', 'worldbooks', 'presets', 'extensions', 'automation', 'backup'],
         });
     });
     
@@ -43,50 +50,410 @@ async function init(router) {
     router.get('/stats', (req, res) => {
         try {
             const stats = resources.getStats();
-            res.json(stats);
+            res.json({ success: true, ...stats });
         } catch (e) {
             console.error('[ST Manager] 获取统计失败:', e);
-            res.status(500).json({ error: e.message });
+            res.status(500).json({ success: false, error: e.message });
         }
     });
     
-    // ============ 资源列表接口 ============
+    // ============ 角色卡接口 ============
     router.get('/cards/list', (req, res) => {
         try {
-            const items = resources.listCards();
-            res.json({ success: true, items, count: items.length });
+            const { search, folder, page, pageSize, sort } = req.query;
+            const result = cards.listCards({
+                search,
+                folder,
+                page: parseInt(page) || 1,
+                pageSize: parseInt(pageSize) || 50,
+                sort,
+            });
+            res.json(result);
         } catch (e) {
             console.error('[ST Manager] 获取角色卡列表失败:', e);
             res.status(500).json({ success: false, error: e.message });
         }
     });
     
+    router.get('/cards/detail/:cardId(*)', (req, res) => {
+        try {
+            const card = cards.getCard(req.params.cardId);
+            if (card) {
+                res.json({ success: true, card });
+            } else {
+                res.status(404).json({ success: false, error: '卡片不存在' });
+            }
+        } catch (e) {
+            console.error('[ST Manager] 获取卡片详情失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.get('/cards/folders', (req, res) => {
+        try {
+            const folders = cards.listFolders();
+            res.json({ success: true, folders });
+        } catch (e) {
+            console.error('[ST Manager] 获取文件夹列表失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.get('/cards/tags', (req, res) => {
+        try {
+            const tags = cards.getAllTags();
+            res.json({ success: true, tags });
+        } catch (e) {
+            console.error('[ST Manager] 获取标签列表失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/cards/move', (req, res) => {
+        try {
+            const { cardId, targetFolder } = req.body || {};
+            const result = cards.moveCard(cardId, targetFolder);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 移动卡片失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/cards/delete', (req, res) => {
+        try {
+            const { cardId, moveToTrash } = req.body || {};
+            const result = cards.deleteCard(cardId, moveToTrash !== false);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 删除卡片失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/cards/tags/add', (req, res) => {
+        try {
+            const { cardIds, tags } = req.body || {};
+            const result = cards.addTags(cardIds, tags);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 添加标签失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/cards/tags/remove', (req, res) => {
+        try {
+            const { cardIds, tags } = req.body || {};
+            const result = cards.removeTags(cardIds, tags);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 移除标签失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/folders/create', (req, res) => {
+        try {
+            const { folderPath } = req.body || {};
+            const result = cards.createFolder(folderPath);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 创建文件夹失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/folders/rename', (req, res) => {
+        try {
+            const { oldPath, newName } = req.body || {};
+            const result = cards.renameFolder(oldPath, newName);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 重命名文件夹失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/folders/delete', (req, res) => {
+        try {
+            const { folderPath, recursive } = req.body || {};
+            const result = cards.deleteFolder(folderPath, recursive);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 删除文件夹失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    // ============ 世界书接口 ============
     router.get('/worldbooks/list', (req, res) => {
         try {
-            const items = resources.listWorldbooks();
-            res.json({ success: true, items, count: items.length });
+            const { type, search, page, pageSize } = req.query;
+            const result = worldInfo.listWorldbooks(
+                type || 'all',
+                search || '',
+                parseInt(page) || 1,
+                parseInt(pageSize) || 20
+            );
+            res.json(result);
         } catch (e) {
             console.error('[ST Manager] 获取世界书列表失败:', e);
             res.status(500).json({ success: false, error: e.message });
         }
     });
     
+    router.get('/worldbooks/detail/:worldbookId(*)', (req, res) => {
+        try {
+            const wb = worldInfo.getWorldbook(req.params.worldbookId);
+            if (wb) {
+                res.json({ success: true, worldbook: wb });
+            } else {
+                res.status(404).json({ success: false, error: '世界书不存在' });
+            }
+        } catch (e) {
+            console.error('[ST Manager] 获取世界书详情失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/worldbooks/save', (req, res) => {
+        try {
+            const { worldbookId, data } = req.body || {};
+            const result = worldInfo.saveWorldbook(worldbookId, data);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 保存世界书失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/worldbooks/delete', (req, res) => {
+        try {
+            const { worldbookId } = req.body || {};
+            const result = worldInfo.deleteWorldbook(worldbookId);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 删除世界书失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.get('/worldbooks/stats', (req, res) => {
+        try {
+            const stats = worldInfo.getStats();
+            res.json({ success: true, ...stats });
+        } catch (e) {
+            console.error('[ST Manager] 获取世界书统计失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    // ============ 预设接口 ============
     router.get('/presets/list', (req, res) => {
         try {
-            const items = resources.listPresets();
-            res.json({ success: true, items, count: items.length });
+            const { type, search, page, pageSize } = req.query;
+            const result = presets.listPresets({
+                type,
+                search,
+                page: parseInt(page) || 1,
+                pageSize: parseInt(pageSize) || 50,
+            });
+            res.json(result);
         } catch (e) {
             console.error('[ST Manager] 获取预设列表失败:', e);
             res.status(500).json({ success: false, error: e.message });
         }
     });
     
+    router.get('/presets/detail/:presetId(*)', (req, res) => {
+        try {
+            const preset = presets.getPreset(req.params.presetId);
+            if (preset) {
+                res.json({ success: true, preset });
+            } else {
+                res.status(404).json({ success: false, error: '预设不存在' });
+            }
+        } catch (e) {
+            console.error('[ST Manager] 获取预设详情失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/presets/save', (req, res) => {
+        try {
+            const { presetId, data } = req.body || {};
+            const result = presets.savePreset(presetId, data);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 保存预设失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/presets/delete', (req, res) => {
+        try {
+            const { presetId } = req.body || {};
+            const result = presets.deletePreset(presetId);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 删除预设失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/presets/duplicate', (req, res) => {
+        try {
+            const { presetId, newName } = req.body || {};
+            const result = presets.duplicatePreset(presetId, newName);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 复制预设失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.get('/presets/stats', (req, res) => {
+        try {
+            const stats = presets.getStats();
+            res.json({ success: true, ...stats });
+        } catch (e) {
+            console.error('[ST Manager] 获取预设统计失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    // 获取预设绑定的正则
+    router.get('/presets/regex/:presetId(*)', (req, res) => {
+        try {
+            const result = presets.getPresetRegexes(req.params.presetId);
+            if (result.success) {
+                res.json(result);
+            } else {
+                res.status(404).json(result);
+            }
+        } catch (e) {
+            console.error('[ST Manager] 获取预设正则失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    // ============ 扩展接口 (Regex/Scripts/QR) ============
+    router.get('/extensions/list', (req, res) => {
+        try {
+            const { mode, filterType, search } = req.query;
+            const items = extensions.listExtensions(
+                mode || 'regex',
+                filterType || 'all',
+                search || ''
+            );
+            res.json({ success: true, items, count: items.length });
+        } catch (e) {
+            console.error('[ST Manager] 获取扩展列表失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.get('/extensions/detail/:extensionId(*)', (req, res) => {
+        try {
+            const ext = extensions.getExtension(req.params.extensionId);
+            if (ext) {
+                res.json({ success: true, extension: ext });
+            } else {
+                res.status(404).json({ success: false, error: '扩展不存在' });
+            }
+        } catch (e) {
+            console.error('[ST Manager] 获取扩展详情失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/extensions/save', (req, res) => {
+        try {
+            const { extensionId, data } = req.body || {};
+            const result = extensions.saveExtension(extensionId, data);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 保存扩展失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.post('/extensions/delete', (req, res) => {
+        try {
+            const { extensionId } = req.body || {};
+            const result = extensions.deleteExtension(extensionId);
+            res.json(result);
+        } catch (e) {
+            console.error('[ST Manager] 删除扩展失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    router.get('/extensions/stats', (req, res) => {
+        try {
+            const stats = extensions.getStats();
+            res.json({ success: true, ...stats });
+        } catch (e) {
+            console.error('[ST Manager] 获取扩展统计失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    // 兼容旧路由
     router.get('/regex/list', (req, res) => {
         try {
-            const items = resources.listRegexScripts();
+            const { filterType, search } = req.query;
+            const items = extensions.listExtensions('regex', filterType || 'all', search || '');
             res.json({ success: true, items, count: items.length });
         } catch (e) {
             console.error('[ST Manager] 获取正则脚本列表失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    // ============ 正则脚本接口 (重中之重) ============
+    // 全局正则 - 从 settings.json 中提取
+    router.get('/regex/global', (req, res) => {
+        try {
+            const result = regex.getGlobalRegex();
+            res.json({ success: true, ...result });
+        } catch (e) {
+            console.error('[ST Manager] 获取全局正则失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    // 正则脚本文件列表 - 从 regex/ 目录读取
+    router.get('/regex/scripts', (req, res) => {
+        try {
+            const scripts = regex.listRegexScripts();
+            res.json({ success: true, scripts, count: scripts.length });
+        } catch (e) {
+            console.error('[ST Manager] 获取正则脚本列表失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    // 汇总正则 - 全局 + 预设绑定
+    router.get('/regex/aggregate', (req, res) => {
+        try {
+            const result = regex.aggregateRegex();
+            res.json({ success: true, ...result });
+        } catch (e) {
+            console.error('[ST Manager] 汇总正则失败:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+    
+    // 从预设数据中提取正则
+    router.post('/regex/extract-from-preset', (req, res) => {
+        try {
+            const { presetData } = req.body || {};
+            const regexes = regex.extractRegexFromPresetData(presetData || {});
+            res.json({ success: true, regexes, count: regexes.length });
+        } catch (e) {
+            console.error('[ST Manager] 提取预设正则失败:', e);
             res.status(500).json({ success: false, error: e.message });
         }
     });
