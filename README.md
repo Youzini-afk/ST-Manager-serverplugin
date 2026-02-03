@@ -36,20 +36,46 @@ SillyTavern 资源管理与自动化工具 - 完整集成插件
 enableServerPlugins: true
 ```
 
-### 2. 安装插件
+### 2. 安装服务端插件
 
 ```bash
 cd SillyTavern/plugins
-git clone https://github.com/Youzini-afk/st-manager.git
+git clone https://github.com/Youzini-afk/ST-Manager-serverplugin.git
 ```
 
-### 3. 重启 SillyTavern
+### 3. 安装前端扩展
 
-重启后，插件会自动加载。
+#### 方式 A：手动复制（推荐新手）
+1. 构建前端：
+   ```bash
+   cd ST-Manager-serverplugin/client
+   npm install
+   npm run build
+   ```
+2. 复制 `dist` 文件夹内容到 SillyTavern 的扩展目录：
+   ```
+   SillyTavern/public/scripts/extensions/ST-Manager/
+   ```
+3. 在酒馆Web界面的 **扩展面板** 中启用 ST Manager
 
-### 4. 安装前端扩展
+#### 方式 B：自动安装（仓库方式）
+编辑 `config.yaml` 的 `extensions` 部分：
+```yaml
+extensions:
+  - url: "https://github.com/Youzini-afk/ST-Manager-serverplugin"
+    enabled: true
+```
 
-将 `client/dist` 目录作为 SillyTavern 扩展安装，或者手动加载脚本。
+### 4. 重启 SillyTavern
+
+重启后，插件会自动加载，前端也会显示在界面中。
+
+### 5. 在酒馆中使用
+
+安装完成后，打开 SillyTavern：
+- 前端 UI 会显示在**右侧面板** 的 **Extensions** 标签页中
+- 搜索 "ST Manager" 或在扩展列表中找到
+- 点击启用后即可使用所有功能
 
 ## 📁 目录结构
 
@@ -159,4 +185,4 @@ MIT
 
 欢迎提交 Issue 和 Pull Request！
 
-- GitHub: https://github.com/Youzini-afk/st-manager
+- GitHub: https://github.com/Youzini-afk/ST-Manager-serverplugin
