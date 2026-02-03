@@ -34,20 +34,29 @@ function registerRoutes(app, staticDir) {
     
     // ============ 系统 API ============
     
-    // 服务器状态
+    // 服务器状态（前端轮询用）
     app.get('/api/status', (req, res) => {
         try {
+            // 前端期望的格式：{ status: 'ready', message: '', progress: 0, total: 0 }
             const stats = resources ? resources.getStats() : {};
             res.json({
-                success: true,
+                status: 'ready',  // 服务器已就绪
+                message: '资源库已就绪',
+                progress: stats.characters || 0,
+                total: stats.characters || 0,
                 scanning: false,
-                progress: 100,
                 version: '2.0.0',
                 mode: 'plugin',
                 ...stats
             });
         } catch (e) {
-            res.json({ success: true, scanning: false, progress: 100 });
+            res.json({ 
+                status: 'ready', 
+                message: '资源库已就绪',
+                scanning: false, 
+                progress: 0,
+                total: 0 
+            });
         }
     });
     
