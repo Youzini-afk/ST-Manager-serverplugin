@@ -12,6 +12,8 @@ const { execSync, exec } = require('child_process');
 
 // 导入核心模块
 let cards, worldInfo, presets, extensions, automation, backup, config, regex, resources;
+// 导入正则工具
+const regexUtils = require('../utils/regex');
 
 // ============ ST 本地路径探测/校验 ============
 
@@ -1045,40 +1047,14 @@ function registerRoutes(app, staticDir) {
                     }
                 }
 
-                // 对于正则类型，还需要从 settings.json 导出全局正则
+                // 对于正则类型，使用专门的工具函数从 settings.json 导出全局正则
                 if (resource_type === 'regex') {
-                    const settingsPath = path.join(userDir, 'settings.json');
-                    if (fs.existsSync(settingsPath)) {
-                        try {
-                            const settingsRaw = fs.readFileSync(settingsPath, 'utf-8');
-                            const settings = JSON.parse(settingsRaw);
-
-                            // 提取全局正则
-                            const extSettings = settings.extension_settings || {};
-                            const regexList = extSettings.regex || [];
-
-                            if (Array.isArray(regexList) && regexList.length > 0) {
-                                for (let i = 0; i < regexList.length; i++) {
-                                    const item = regexList[i];
-                                    if (!item || typeof item !== 'object') continue;
-
-                                    const scriptName = item.scriptName || `global_regex_${i + 1}`;
-                                    const safeFileName = scriptName.replace(/[<>:"/\\|?*]/g, '_') + '.json';
-                                    const destPath = path.join(destDir, 'global__' + safeFileName);
-
-                                    try {
-                                        const payload = { ...item, __source: 'settings.json' };
-                                        fs.writeFileSync(destPath, JSON.stringify(payload, null, 2), 'utf-8');
-                                        successCount++;
-                                    } catch (writeErr) {
-                                        failedCount++;
-                                        errors.push(`global_regex: ${writeErr.message}`);
-                                    }
-                                }
-                            }
-                        } catch (settingsErr) {
-                            console.warn('[ST Manager] 读取 settings.json 失败:', settingsErr.message);
-                        }
+                    const settingsPath = path.join(srcUserDir, 'settings.json');
+                    const globalResult = regexUtils.exportGlobalRegex(settingsPath, destDir);
+                    successCount += globalResult.success;
+                    failedCount += globalResult.failed;
+                    if (globalResult.files && globalResult.files.length > 0) {
+                        console.log(`[ST Manager] 导出全局正则: ${globalResult.files.join(', ')}`);
                     }
                 }
 
