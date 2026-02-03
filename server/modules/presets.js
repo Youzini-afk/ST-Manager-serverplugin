@@ -34,9 +34,9 @@ const PRESET_DIRS = {
  * 获取预设目录路径
  */
 function getPresetDir(presetType = 'openai') {
-    const dataRoot = config.getDataRoot();
-    const dirName = PRESET_DIRS[presetType] || PRESET_DIRS.openai;
-    return path.join(dataRoot, dirName);
+    // 从插件的 library 目录读取同步后的预设
+    const pluginDataDir = config.getPluginDataDir();
+    return path.join(pluginDataDir, 'library', 'presets');
 }
 
 /**
@@ -44,7 +44,7 @@ function getPresetDir(presetType = 'openai') {
  */
 function parsePresetContent(data) {
     const samplers = {};
-    
+
     // OpenAI 类型参数
     if ('temperature' in data) samplers.temperature = data.temperature;
     if ('top_p' in data) samplers.top_p = data.top_p;
@@ -53,7 +53,7 @@ function parsePresetContent(data) {
     if ('presence_penalty' in data) samplers.presence_penalty = data.presence_penalty;
     if ('max_tokens' in data) samplers.max_tokens = data.max_tokens;
     if ('max_length' in data) samplers.max_length = data.max_length;
-    
+
     // TextGen 类型参数
     if ('rep_pen' in data) samplers.rep_pen = data.rep_pen;
     if ('rep_pen_range' in data) samplers.rep_pen_range = data.rep_pen_range;
@@ -63,11 +63,11 @@ function parsePresetContent(data) {
     if ('mirostat_mode' in data) samplers.mirostat_mode = data.mirostat_mode;
     if ('mirostat_tau' in data) samplers.mirostat_tau = data.mirostat_tau;
     if ('mirostat_eta' in data) samplers.mirostat_eta = data.mirostat_eta;
-    
+
     // NovelAI 参数
     if ('cfg_scale' in data) samplers.cfg_scale = data.cfg_scale;
     if ('phrase_rep_pen' in data) samplers.phrase_rep_pen = data.phrase_rep_pen;
-    
+
     return samplers;
 }
 
@@ -88,7 +88,7 @@ function detectPresetType(data) {
     if ('preset' in data || 'api_type' in data) {
         return 'textgen';
     }
-    
+
     return 'openai'; // 默认
 }
 
@@ -100,37 +100,37 @@ function detectPresetType(data) {
  */
 function listPresets(options = {}) {
     const { type = 'all', search = '', page = 1, pageSize = 50 } = options;
-    
+
     const items = [];
     const typesToScan = type === 'all' ? Object.keys(PRESET_DIRS) : [type];
-    
+
     for (const presetType of typesToScan) {
         const dir = getPresetDir(presetType);
         if (!fs.existsSync(dir)) continue;
-        
+
         try {
             const files = fs.readdirSync(dir);
-            
+
             for (const file of files) {
                 if (!file.toLowerCase().endsWith('.json')) continue;
-                
+
                 const fullPath = path.join(dir, file);
                 try {
                     const stat = fs.statSync(fullPath);
                     if (!stat.isFile()) continue;
-                    
+
                     const content = fs.readFileSync(fullPath, 'utf-8');
                     const data = JSON.parse(content);
-                    
+
                     const name = file.replace('.json', '');
                     const samplers = parsePresetContent(data);
-                    
+
                     // 提取预设绑定正则
                     const regexes = regex.extractRegexFromPresetData(data);
                     const extensions = data.extensions || {};
                     const regexScripts = extensions.regex_scripts || [];
                     const regexCount = Array.isArray(regexScripts) ? regexScripts.length : 0;
-                    
+
                     const item = {
                         id: `${presetType}::${file}`,
                         name,
@@ -147,7 +147,7 @@ function listPresets(options = {}) {
                         regexCount: regexCount,
                         extractedRegexCount: regexes.length,
                     };
-                    
+
                     items.push(item);
                 } catch (e) {
                     // 解析失败，跳过
@@ -157,7 +157,7 @@ function listPresets(options = {}) {
             console.error(`[ST Manager] 扫描预设目录失败 ${dir}:`, e);
         }
     }
-    
+
     // 搜索过滤
     let filtered = items;
     if (search) {
@@ -167,15 +167,15 @@ function listPresets(options = {}) {
             return haystack.includes(searchLower);
         });
     }
-    
+
     // 按修改时间倒序
     filtered.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
-    
+
     // 分页
     const total = filtered.length;
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    
+
     return {
         success: true,
         items: filtered.slice(start, end),
@@ -190,22 +190,22 @@ function listPresets(options = {}) {
  */
 function getPreset(presetId) {
     if (!presetId) return null;
-    
+
     const parts = presetId.split('::');
     if (parts.length < 2) return null;
-    
+
     const presetType = parts[0];
     const filename = parts.slice(1).join('::');
     const dir = getPresetDir(presetType);
     const fullPath = path.join(dir, filename);
-    
+
     if (!fs.existsSync(fullPath)) return null;
-    
+
     try {
         const stat = fs.statSync(fullPath);
         const content = fs.readFileSync(fullPath, 'utf-8');
         const data = JSON.parse(content);
-        
+
         return {
             id: presetId,
             filename,
@@ -232,12 +232,12 @@ function savePreset(presetId, data) {
     if (!presetId || !data) {
         return { success: false, error: '缺少必要参数' };
     }
-    
+
     const preset = getPreset(presetId);
     if (!preset) {
         return { success: false, error: '预设不存在' };
     }
-    
+
     try {
         fs.writeFileSync(preset.path, JSON.stringify(data, null, 2), 'utf-8');
         return { success: true };
@@ -254,12 +254,12 @@ function deletePreset(presetId) {
     if (!presetId) {
         return { success: false, error: '缺少预设 ID' };
     }
-    
+
     const preset = getPreset(presetId);
     if (!preset) {
         return { success: false, error: '预设不存在' };
     }
-    
+
     try {
         fs.unlinkSync(preset.path);
         return { success: true };
@@ -276,28 +276,28 @@ function uploadPreset(fileContent, filename, targetType = null) {
     if (!fileContent || !filename) {
         return { success: false, error: '缺少文件内容或文件名' };
     }
-    
+
     if (!filename.toLowerCase().endsWith('.json')) {
         return { success: false, error: '仅支持 JSON 文件' };
     }
-    
+
     try {
         const content = fileContent.toString('utf-8');
         const data = JSON.parse(content);
-        
+
         // 检测或使用指定的类型
         const presetType = targetType || detectPresetType(data);
         const dir = getPresetDir(presetType);
-        
+
         // 确保目录存在
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
-        
+
         // 安全化文件名
         const safeName = filename.replace(/[\\/*?:"<>|]/g, '_');
         let savePath = path.join(dir, safeName);
-        
+
         // 防重名
         const namePart = path.basename(safeName, '.json');
         let counter = 1;
@@ -305,9 +305,9 @@ function uploadPreset(fileContent, filename, targetType = null) {
             savePath = path.join(dir, `${namePart}_${counter}.json`);
             counter++;
         }
-        
+
         fs.writeFileSync(savePath, content, 'utf-8');
-        
+
         return {
             success: true,
             path: savePath,
@@ -326,16 +326,16 @@ function uploadPreset(fileContent, filename, targetType = null) {
 function getStats() {
     const result = listPresets({ pageSize: 999999 });
     const items = result.items || [];
-    
+
     const byType = {};
     for (const type of Object.keys(PRESET_DIRS)) {
         byType[type] = items.filter(i => i.type === type).length;
     }
-    
+
     // 统计正则绑定
     const totalRegexCount = items.reduce((sum, i) => sum + (i.regexCount || 0), 0);
     const presetsWithRegex = items.filter(i => (i.regexCount || 0) > 0).length;
-    
+
     return {
         total: items.length,
         byType,
@@ -353,26 +353,26 @@ function duplicatePreset(presetId, newName) {
     if (!presetId) {
         return { success: false, error: '缺少预设 ID' };
     }
-    
+
     const preset = getPreset(presetId);
     if (!preset) {
         return { success: false, error: '预设不存在' };
     }
-    
+
     const dir = path.dirname(preset.path);
     const safeName = (newName || `${preset.filename.replace('.json', '')}_copy`).replace(/[\\/*?:"<>|]/g, '_');
     let newPath = path.join(dir, `${safeName}.json`);
-    
+
     // 防重名
     let counter = 1;
     while (fs.existsSync(newPath)) {
         newPath = path.join(dir, `${safeName}_${counter}.json`);
         counter++;
     }
-    
+
     try {
         fs.copyFileSync(preset.path, newPath);
-        
+
         const newId = `${preset.type}::${path.basename(newPath)}`;
         return { success: true, newId, path: newPath };
     } catch (e) {
@@ -389,7 +389,7 @@ function getPresetRegexes(presetId) {
     if (!preset) {
         return { success: false, error: '预设不存在' };
     }
-    
+
     return {
         success: true,
         presetId,

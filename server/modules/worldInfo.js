@@ -22,25 +22,25 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0
 function extractPngMetadata(filePath) {
     try {
         const buffer = fs.readFileSync(filePath);
-        
+
         if (!buffer.slice(0, 8).equals(PNG_SIGNATURE)) {
             return null;
         }
-        
+
         let offset = 8;
-        
+
         while (offset < buffer.length) {
             const length = buffer.readUInt32BE(offset);
             const type = buffer.slice(offset + 4, offset + 8).toString('ascii');
-            
+
             if (type === 'tEXt') {
                 const data = buffer.slice(offset + 8, offset + 8 + length);
                 const nullIndex = data.indexOf(0);
-                
+
                 if (nullIndex !== -1) {
                     const keyword = data.slice(0, nullIndex).toString('latin1');
                     const text = data.slice(nullIndex + 1).toString('latin1');
-                    
+
                     if (keyword === 'chara') {
                         try {
                             const decoded = Buffer.from(text, 'base64').toString('utf-8');
@@ -51,10 +51,10 @@ function extractPngMetadata(filePath) {
                     }
                 }
             }
-            
+
             offset += 12 + length;
         }
-        
+
         return null;
     } catch (e) {
         return null;
@@ -66,7 +66,7 @@ function extractPngMetadata(filePath) {
  */
 function normalizeWiEntries(raw) {
     if (!raw) return [];
-    
+
     let entries = [];
     if (Array.isArray(raw)) {
         entries = raw;
@@ -76,24 +76,24 @@ function normalizeWiEntries(raw) {
             entries = Object.values(entries);
         }
     }
-    
+
     const normalized = [];
     for (const entry of entries) {
         if (typeof entry !== 'object' || entry === null) continue;
-        
+
         let keys = entry.keys || entry.key;
         if (typeof keys === 'string') keys = [keys];
         if (!Array.isArray(keys)) keys = [];
-        
+
         let secKeys = entry.secondary_keys || entry.keysecondary;
         if (typeof secKeys === 'string') secKeys = [secKeys];
         if (!Array.isArray(secKeys)) secKeys = [];
-        
+
         let enabled = entry.enabled;
         if (enabled === undefined) {
             enabled = !entry.disable;
         }
-        
+
         normalized.push({
             keys: keys.map(k => String(k).trim().toLowerCase()).filter(k => k).sort(),
             secondary_keys: secKeys.map(k => String(k).trim().toLowerCase()).filter(k => k).sort(),
@@ -108,7 +108,7 @@ function normalizeWiEntries(raw) {
             use_regex: Boolean(entry.use_regex),
         });
     }
-    
+
     normalized.sort((a, b) => {
         const keyA = a.keys.join(',');
         const keyB = b.keys.join(',');
@@ -116,7 +116,7 @@ function normalizeWiEntries(raw) {
         if (a.content !== b.content) return a.content.localeCompare(b.content);
         return a.comment.localeCompare(b.comment);
     });
-    
+
     return normalized;
 }
 
@@ -127,12 +127,12 @@ function computeWiSignature(raw) {
     try {
         const entries = normalizeWiEntries(raw);
         if (entries.length === 0) return null;
-        
+
         const cleanText = (text) => {
             if (typeof text !== 'string') return '';
             return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\s+/g, ' ').trim();
         };
-        
+
         const entrySigs = [];
         for (const entry of entries) {
             const content = cleanText(entry.content);
@@ -140,7 +140,7 @@ function computeWiSignature(raw) {
             if (!content && !comment) continue;
             entrySigs.push(`${content}||${comment}`);
         }
-        
+
         entrySigs.sort();
         const payload = entrySigs.join('\n');
         return crypto.createHash('sha1').update(payload, 'utf-8').digest('hex');
@@ -154,7 +154,7 @@ function computeWiSignature(raw) {
  */
 function countEntries(raw) {
     if (!raw) return 0;
-    
+
     let entries = [];
     if (Array.isArray(raw)) {
         entries = raw;
@@ -164,7 +164,7 @@ function countEntries(raw) {
             entries = Object.values(entries);
         }
     }
-    
+
     return entries.length;
 }
 
@@ -179,23 +179,26 @@ function countEntries(raw) {
  */
 function listWorldbooks(wiType = 'all', search = '', page = 1, pageSize = 20) {
     const items = [];
-    const dataRoot = config.getDataRoot();
-    const resourceDirs = config.getResourceDirs();
-    const resourcesRoot = config.getResourcesRoot();
-    const resourceSubDirs = config.getResourceSubDirs();
-    
+
+    // 从插件的 library 目录读取同步后的世界书
+    const pluginDataDir = config.getPluginDataDir();
+    const libraryRoot = path.join(pluginDataDir, 'library');
+
+    // Library 目录结构
+    const lorebooksDir = path.join(libraryRoot, 'lorebooks');
+    const charactersDir = path.join(libraryRoot, 'characters');
+
     const searchLower = (search || '').toLowerCase().trim();
-    
+
     // 收集内嵌世界书名称和签名（用于全局去重）
     const embeddedNameSet = new Set();
     const embeddedSigSet = new Set();
-    
+
     // 收集资源目录（用于排除）
     const resourceLoreDirs = new Set();
-    
+
     // 1. 预扫描内嵌世界书（如果需要与全局去重）
     if (wiType === 'all' || wiType === 'global') {
-        const charactersDir = path.join(dataRoot, resourceDirs.characters);
         if (fs.existsSync(charactersDir)) {
             try {
                 scanEmbeddedWorldbooks(charactersDir, embeddedNameSet, embeddedSigSet);
@@ -204,55 +207,29 @@ function listWorldbooks(wiType = 'all', search = '', page = 1, pageSize = 20) {
             }
         }
     }
-    
-    // 2. 预收集资源世界书目录
-    if (wiType === 'all' || wiType === 'resource' || wiType === 'global') {
-        if (fs.existsSync(resourcesRoot)) {
-            try {
-                const folders = fs.readdirSync(resourcesRoot);
-                for (const folder of folders) {
-                    const loreDir = path.join(resourcesRoot, folder, resourceSubDirs.lorebooks);
-                    if (fs.existsSync(loreDir)) {
-                        resourceLoreDirs.add(path.normalize(loreDir));
-                    }
-                }
-            } catch (e) {
-                // 忽略
-            }
-        }
-    }
-    
-    // 3. 扫描全局目录
+
+    // 2. 扫描全局目录 (library/lorebooks)
     if (wiType === 'all' || wiType === 'global') {
-        const globalDir = path.join(dataRoot, resourceDirs.worldbooks);
-        if (fs.existsSync(globalDir)) {
-            scanGlobalWorldbooks(globalDir, items, searchLower, embeddedNameSet, embeddedSigSet, resourceLoreDirs, dataRoot);
+        if (fs.existsSync(lorebooksDir)) {
+            scanGlobalWorldbooks(lorebooksDir, items, searchLower, embeddedNameSet, embeddedSigSet, resourceLoreDirs, libraryRoot);
         }
     }
-    
-    // 4. 扫描资源目录
-    if (wiType === 'all' || wiType === 'resource') {
-        if (fs.existsSync(resourcesRoot)) {
-            scanResourceWorldbooks(resourcesRoot, resourceSubDirs.lorebooks, items, searchLower, dataRoot);
-        }
-    }
-    
-    // 5. 扫描内嵌世界书
+
+    // 3. 扫描内嵌世界书 (library/characters)
     if (wiType === 'all' || wiType === 'embedded') {
-        const charactersDir = path.join(dataRoot, resourceDirs.characters);
         if (fs.existsSync(charactersDir)) {
             scanEmbeddedWorldbooksForList(charactersDir, items, searchLower);
         }
     }
-    
+
     // 按修改时间倒序
     items.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
-    
+
     // 分页
     const total = items.length;
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    
+
     return {
         success: true,
         items: items.slice(start, end),
@@ -267,33 +244,33 @@ function listWorldbooks(wiType = 'all', search = '', page = 1, pageSize = 20) {
  */
 function scanEmbeddedWorldbooks(charactersDir, nameSet, sigSet) {
     const files = fs.readdirSync(charactersDir);
-    
+
     for (const file of files) {
         if (!file.toLowerCase().endsWith('.png') && !file.toLowerCase().endsWith('.json')) continue;
-        
+
         const fullPath = path.join(charactersDir, file);
         try {
             const stat = fs.statSync(fullPath);
             if (!stat.isFile()) continue;
-            
+
             let cardData = null;
             if (file.toLowerCase().endsWith('.png')) {
                 cardData = extractPngMetadata(fullPath);
             } else {
                 cardData = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
             }
-            
+
             if (!cardData) continue;
-            
+
             const data = cardData.data || cardData;
             const book = data.character_book;
             if (!book) continue;
-            
+
             const bookName = book.name || data.character_book_name || `${data.name || file}'s WI`;
             if (bookName) {
                 nameSet.add(String(bookName).trim().toLowerCase());
             }
-            
+
             const sig = computeWiSignature(book);
             if (sig) {
                 sigSet.add(sig);
@@ -309,12 +286,12 @@ function scanEmbeddedWorldbooks(charactersDir, nameSet, sigSet) {
  */
 function scanGlobalWorldbooks(globalDir, items, search, embeddedNameSet, embeddedSigSet, resourceLoreDirs, dataRoot) {
     const files = fs.readdirSync(globalDir);
-    
+
     for (const file of files) {
         if (!file.toLowerCase().endsWith('.json')) continue;
-        
+
         const fullPath = path.join(globalDir, file);
-        
+
         // 排除资源目录
         const normalizedPath = path.normalize(fullPath);
         let isInResourceDir = false;
@@ -325,24 +302,24 @@ function scanGlobalWorldbooks(globalDir, items, search, embeddedNameSet, embedde
             }
         }
         if (isInResourceDir) continue;
-        
+
         try {
             const stat = fs.statSync(fullPath);
             if (!stat.isFile()) continue;
-            
+
             const content = fs.readFileSync(fullPath, 'utf-8');
             const data = JSON.parse(content);
-            
+
             const name = file.replace('.json', '');
             const entryCount = countEntries(data);
-            
+
             // 检查是否与内嵌世界书重复
             const nameLower = name.toLowerCase();
             const isDuplicateName = embeddedNameSet.has(nameLower);
-            
+
             const sig = computeWiSignature(data);
             const isDuplicateSig = sig && embeddedSigSet.has(sig);
-            
+
             const item = {
                 id: `global::${file}`,
                 name,
@@ -354,13 +331,13 @@ function scanGlobalWorldbooks(globalDir, items, search, embeddedNameSet, embedde
                 size: stat.size,
                 isDuplicate: isDuplicateName || isDuplicateSig,
             };
-            
+
             // 搜索过滤
             if (search) {
                 const haystack = `${item.name} ${item.filename}`.toLowerCase();
                 if (!haystack.includes(search)) continue;
             }
-            
+
             items.push(item);
         } catch (e) {
             // 跳过
@@ -373,32 +350,32 @@ function scanGlobalWorldbooks(globalDir, items, search, embeddedNameSet, embedde
  */
 function scanResourceWorldbooks(resourcesRoot, lorebookSub, items, search, dataRoot) {
     const folders = fs.readdirSync(resourcesRoot);
-    
+
     for (const folder of folders) {
         const folderPath = path.join(resourcesRoot, folder);
-        
+
         try {
             const folderStat = fs.statSync(folderPath);
             if (!folderStat.isDirectory()) continue;
-            
+
             const loreDir = path.join(folderPath, lorebookSub);
             if (!fs.existsSync(loreDir)) continue;
-            
+
             const files = fs.readdirSync(loreDir);
             for (const file of files) {
                 if (!file.toLowerCase().endsWith('.json')) continue;
-                
+
                 const fullPath = path.join(loreDir, file);
                 try {
                     const stat = fs.statSync(fullPath);
                     if (!stat.isFile()) continue;
-                    
+
                     const content = fs.readFileSync(fullPath, 'utf-8');
                     const data = JSON.parse(content);
-                    
+
                     const name = file.replace('.json', '');
                     const entryCount = countEntries(data);
-                    
+
                     const item = {
                         id: `resource::${folder}::${file}`,
                         name,
@@ -410,13 +387,13 @@ function scanResourceWorldbooks(resourcesRoot, lorebookSub, items, search, dataR
                         mtime: stat.mtimeMs,
                         size: stat.size,
                     };
-                    
+
                     // 搜索过滤
                     if (search) {
                         const haystack = `${item.name} ${item.filename} ${folder}`.toLowerCase();
                         if (!haystack.includes(search)) continue;
                     }
-                    
+
                     items.push(item);
                 } catch (e) {
                     // 跳过
@@ -433,32 +410,32 @@ function scanResourceWorldbooks(resourcesRoot, lorebookSub, items, search, dataR
  */
 function scanEmbeddedWorldbooksForList(charactersDir, items, search) {
     const files = fs.readdirSync(charactersDir);
-    
+
     for (const file of files) {
         if (!file.toLowerCase().endsWith('.png') && !file.toLowerCase().endsWith('.json')) continue;
-        
+
         const fullPath = path.join(charactersDir, file);
         try {
             const stat = fs.statSync(fullPath);
             if (!stat.isFile()) continue;
-            
+
             let cardData = null;
             if (file.toLowerCase().endsWith('.png')) {
                 cardData = extractPngMetadata(fullPath);
             } else {
                 cardData = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
             }
-            
+
             if (!cardData) continue;
-            
+
             const data = cardData.data || cardData;
             const book = data.character_book;
             if (!book) continue;
-            
+
             const cardName = data.name || file.replace(/\.(png|json)$/i, '');
             const bookName = book.name || data.character_book_name || `${cardName}'s WI`;
             const entryCount = countEntries(book);
-            
+
             const item = {
                 id: `embedded::${file}`,
                 name: bookName,
@@ -468,13 +445,13 @@ function scanEmbeddedWorldbooksForList(charactersDir, items, search) {
                 entryCount,
                 mtime: stat.mtimeMs,
             };
-            
+
             // 搜索过滤
             if (search) {
                 const haystack = `${item.name} ${item.cardName} ${item.cardFile}`.toLowerCase();
                 if (!haystack.includes(search)) continue;
             }
-            
+
             items.push(item);
         } catch (e) {
             // 跳过
@@ -490,18 +467,18 @@ function scanEmbeddedWorldbooksForList(charactersDir, items, search) {
  */
 function getWorldbook(worldbookId) {
     if (!worldbookId) return null;
-    
+
     const dataRoot = config.getDataRoot();
     const resourceDirs = config.getResourceDirs();
     const resourcesRoot = config.getResourcesRoot();
     const resourceSubDirs = config.getResourceSubDirs();
-    
+
     const parts = worldbookId.split('::');
-    
+
     if (parts[0] === 'global' && parts.length >= 2) {
         const filename = parts.slice(1).join('::');
         const fullPath = path.join(dataRoot, resourceDirs.worldbooks, filename);
-        
+
         if (fs.existsSync(fullPath)) {
             try {
                 const content = fs.readFileSync(fullPath, 'utf-8');
@@ -520,7 +497,7 @@ function getWorldbook(worldbookId) {
         const folder = parts[1];
         const filename = parts.slice(2).join('::');
         const fullPath = path.join(resourcesRoot, folder, resourceSubDirs.lorebooks, filename);
-        
+
         if (fs.existsSync(fullPath)) {
             try {
                 const content = fs.readFileSync(fullPath, 'utf-8');
@@ -539,7 +516,7 @@ function getWorldbook(worldbookId) {
     } else if (parts[0] === 'embedded' && parts.length >= 2) {
         const cardFile = parts.slice(1).join('::');
         const fullPath = path.join(dataRoot, resourceDirs.characters, cardFile);
-        
+
         if (fs.existsSync(fullPath)) {
             try {
                 let cardData = null;
@@ -548,7 +525,7 @@ function getWorldbook(worldbookId) {
                 } else {
                     cardData = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
                 }
-                
+
                 if (cardData) {
                     const data = cardData.data || cardData;
                     const book = data.character_book;
@@ -568,7 +545,7 @@ function getWorldbook(worldbookId) {
             }
         }
     }
-    
+
     return null;
 }
 
@@ -579,17 +556,17 @@ function saveWorldbook(worldbookId, data) {
     if (!worldbookId || !data) {
         return { success: false, error: '缺少必要参数' };
     }
-    
+
     const wb = getWorldbook(worldbookId);
     if (!wb) {
         return { success: false, error: '世界书不存在' };
     }
-    
+
     if (wb.type === 'embedded') {
         // 内嵌世界书需要修改角色卡
         return { success: false, error: '暂不支持修改内嵌世界书' };
     }
-    
+
     try {
         fs.writeFileSync(wb.path, JSON.stringify(data, null, 2), 'utf-8');
         return { success: true };
@@ -606,16 +583,16 @@ function deleteWorldbook(worldbookId) {
     if (!worldbookId) {
         return { success: false, error: '缺少世界书 ID' };
     }
-    
+
     const wb = getWorldbook(worldbookId);
     if (!wb) {
         return { success: false, error: '世界书不存在' };
     }
-    
+
     if (wb.type === 'embedded') {
         return { success: false, error: '无法删除内嵌世界书' };
     }
-    
+
     try {
         fs.unlinkSync(wb.path);
         return { success: true };
@@ -631,7 +608,7 @@ function deleteWorldbook(worldbookId) {
 function getStats() {
     const result = listWorldbooks('all', '', 1, 999999);
     const items = result.items || [];
-    
+
     return {
         total: items.length,
         global: items.filter(i => i.type === 'global').length,

@@ -49,33 +49,37 @@ function getRegexWriteDir(dataRoot, resourceDirs) {
  */
 function listExtensions(mode = 'regex', filterType = 'all', search = '') {
     const items = [];
+    // 从插件的 library 目录读取
+    const pluginDataDir = config.getPluginDataDir();
+    const libraryRoot = path.join(pluginDataDir, 'library');
+    // 以下变量保留用于兼容其他函数
     const dataRoot = config.getDataRoot();
     const resourceDirs = config.getResourceDirs();
     const resourcesRoot = config.getResourcesRoot();
     const resourceSubDirs = config.getResourceSubDirs();
-    
+
     // 确定目标全局目录和资源子目录名
     let targetGlobalDir = '';
     let targetResSub = '';
-    
+
     switch (mode) {
         case 'scripts':
-            targetGlobalDir = path.join(dataRoot, resourceDirs.scripts);
+            targetGlobalDir = path.join(libraryRoot, 'extensions', 'scripts');
             targetResSub = resourceSubDirs.scripts;
             break;
         case 'quick_replies':
-            targetGlobalDir = path.join(dataRoot, resourceDirs.quickreplies);
+            targetGlobalDir = path.join(libraryRoot, 'extensions', 'quick-replies');
             targetResSub = resourceSubDirs.quickreplies;
             break;
         case 'regex':
         default:
-            targetGlobalDir = getRegexGlobalDir(dataRoot, resourceDirs);
+            targetGlobalDir = path.join(libraryRoot, 'extensions', 'regex');
             targetResSub = resourceSubDirs.regexes;
             break;
     }
-    
+
     const searchLower = (search || '').toLowerCase().trim();
-    
+
     // 1. 扫描全局目录
     if (filterType === 'all' || filterType === 'global') {
         if (fs.existsSync(targetGlobalDir)) {
@@ -83,21 +87,21 @@ function listExtensions(mode = 'regex', filterType = 'all', search = '') {
                 const files = fs.readdirSync(targetGlobalDir);
                 for (const f of files) {
                     if (!f.toLowerCase().endsWith('.json')) continue;
-                    
+
                     const fullPath = path.join(targetGlobalDir, f);
                     try {
                         const stat = fs.statSync(fullPath);
                         if (!stat.isFile()) continue;
-                        
+
                         const content = fs.readFileSync(fullPath, 'utf-8');
                         const data = JSON.parse(content);
-                        
+
                         // 获取名称
                         let name = f;
                         if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
                             name = data.scriptName || data.name || f;
                         }
-                        
+
                         const item = {
                             id: `global::${f}`,
                             name,
@@ -107,13 +111,13 @@ function listExtensions(mode = 'regex', filterType = 'all', search = '') {
                             mtime: stat.mtimeMs,
                             size: stat.size,
                         };
-                        
+
                         // 搜索过滤
                         if (searchLower) {
                             const haystack = `${item.name} ${item.filename}`.toLowerCase();
                             if (!haystack.includes(searchLower)) continue;
                         }
-                        
+
                         items.push(item);
                     } catch (e) {
                         // 解析失败，跳过
@@ -124,42 +128,42 @@ function listExtensions(mode = 'regex', filterType = 'all', search = '') {
             }
         }
     }
-    
+
     // 2. 扫描资源目录 (card_assets/<folder>/extensions/...)
     if (filterType === 'all' || filterType === 'resource') {
         if (fs.existsSync(resourcesRoot)) {
             try {
                 const resFolders = fs.readdirSync(resourcesRoot);
-                
+
                 for (const folder of resFolders) {
                     const folderPath = path.join(resourcesRoot, folder);
-                    
+
                     try {
                         const folderStat = fs.statSync(folderPath);
                         if (!folderStat.isDirectory()) continue;
-                        
+
                         // 目标扩展目录
                         const targetDir = path.join(folderPath, targetResSub);
                         if (!fs.existsSync(targetDir)) continue;
-                        
+
                         const files = fs.readdirSync(targetDir);
                         for (const f of files) {
                             if (!f.toLowerCase().endsWith('.json')) continue;
-                            
+
                             const fullPath = path.join(targetDir, f);
                             try {
                                 const stat = fs.statSync(fullPath);
                                 if (!stat.isFile()) continue;
-                                
+
                                 const content = fs.readFileSync(fullPath, 'utf-8');
                                 const data = JSON.parse(content);
-                                
+
                                 // 获取名称
                                 let name = f;
                                 if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
                                     name = data.scriptName || data.name || f;
                                 }
-                                
+
                                 const item = {
                                     id: `resource::${folder}::${f}`,
                                     name,
@@ -170,13 +174,13 @@ function listExtensions(mode = 'regex', filterType = 'all', search = '') {
                                     mtime: stat.mtimeMs,
                                     size: stat.size,
                                 };
-                                
+
                                 // 搜索过滤
                                 if (searchLower) {
                                     const haystack = `${item.name} ${item.filename} ${item.sourceFolder}`.toLowerCase();
                                     if (!haystack.includes(searchLower)) continue;
                                 }
-                                
+
                                 items.push(item);
                             } catch (e) {
                                 // 解析失败，跳过
@@ -191,10 +195,10 @@ function listExtensions(mode = 'regex', filterType = 'all', search = '') {
             }
         }
     }
-    
+
     // 按修改时间倒序排列
     items.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
-    
+
     return items;
 }
 
@@ -206,25 +210,25 @@ function listExtensions(mode = 'regex', filterType = 'all', search = '') {
  */
 function getExtension(extensionId) {
     if (!extensionId) return null;
-    
+
     const dataRoot = config.getDataRoot();
     const resourceDirs = config.getResourceDirs();
     const resourcesRoot = config.getResourcesRoot();
     const resourceSubDirs = config.getResourceSubDirs();
-    
+
     const parts = extensionId.split('::');
-    
+
     if (parts[0] === 'global' && parts.length >= 2) {
         // 全局扩展
         const filename = parts.slice(1).join('::');
-        
+
         // 尝试所有可能的全局目录
         const dirs = [
             getRegexGlobalDir(dataRoot, resourceDirs),
             path.join(dataRoot, resourceDirs.scripts),
             path.join(dataRoot, resourceDirs.quickreplies),
         ].filter(Boolean);
-        
+
         for (const dir of dirs) {
             const fullPath = path.join(dir, filename);
             if (fs.existsSync(fullPath)) {
@@ -246,14 +250,14 @@ function getExtension(extensionId) {
         // 资源扩展
         const folder = parts[1];
         const filename = parts.slice(2).join('::');
-        
+
         // 尝试所有可能的资源子目录
         const subDirs = [
             resourceSubDirs.regexes,
             resourceSubDirs.scripts,
             resourceSubDirs.quickreplies,
         ];
-        
+
         for (const subDir of subDirs) {
             const fullPath = path.join(resourcesRoot, folder, subDir, filename);
             if (fs.existsSync(fullPath)) {
@@ -273,7 +277,7 @@ function getExtension(extensionId) {
             }
         }
     }
-    
+
     return null;
 }
 
@@ -288,12 +292,12 @@ function saveExtension(extensionId, data) {
     if (!extensionId || !data) {
         return { success: false, error: '缺少必要参数' };
     }
-    
+
     const ext = getExtension(extensionId);
     if (!ext) {
         return { success: false, error: '扩展不存在' };
     }
-    
+
     try {
         fs.writeFileSync(ext.path, JSON.stringify(data, null, 2), 'utf-8');
         return { success: true };
@@ -313,12 +317,12 @@ function deleteExtension(extensionId) {
     if (!extensionId) {
         return { success: false, error: '缺少扩展 ID' };
     }
-    
+
     const ext = getExtension(extensionId);
     if (!ext) {
         return { success: false, error: '扩展不存在' };
     }
-    
+
     try {
         fs.unlinkSync(ext.path);
         return { success: true };
@@ -340,34 +344,34 @@ function uploadExtension(fileContent, filename, targetType = null) {
     if (!fileContent || !filename) {
         return { success: false, error: '缺少文件内容或文件名' };
     }
-    
+
     if (!filename.toLowerCase().endsWith('.json')) {
         return { success: false, error: '仅支持 JSON 文件' };
     }
-    
+
     const dataRoot = config.getDataRoot();
     const resourceDirs = config.getResourceDirs();
-    
+
     try {
         const content = fileContent.toString('utf-8');
         const data = JSON.parse(content);
-        
+
         // 自动检测类型
         let isRegex = false;
         let isScript = false;
         let isQr = false;
-        
+
         if (typeof data === 'object' && data !== null) {
             // 检测 Regex
             if ('findRegex' in data || 'regex' in data || 'scriptName' in data) {
                 isRegex = true;
             }
-            
+
             // 检测 ST Script (Tavern Helper)
             if (data.type === 'script' || 'scripts' in data) {
                 isScript = true;
             }
-            
+
             // 检测 Quick Reply
             if ('qrList' in data || 'quickReplies' in data || 'entries' in data) {
                 isQr = true;
@@ -382,10 +386,10 @@ function uploadExtension(fileContent, filename, targetType = null) {
                 isScript = true;
             }
         }
-        
+
         // 决定保存路径
         let finalDir = null;
-        
+
         const regexWriteDir = getRegexWriteDir(dataRoot, resourceDirs);
 
         if (targetType === 'regex' && isRegex) {
@@ -404,20 +408,20 @@ function uploadExtension(fileContent, filename, targetType = null) {
                 finalDir = path.join(dataRoot, resourceDirs.quickreplies);
             }
         }
-        
+
         if (!finalDir) {
             return { success: false, error: '无法识别文件类型' };
         }
-        
+
         // 确保目录存在
         if (!fs.existsSync(finalDir)) {
             fs.mkdirSync(finalDir, { recursive: true });
         }
-        
+
         // 安全化文件名
         const safeName = filename.replace(/[\\/*?:"<>|]/g, '_');
         let savePath = path.join(finalDir, safeName);
-        
+
         // 防重名
         const namePart = path.basename(safeName, '.json');
         let counter = 1;
@@ -425,9 +429,9 @@ function uploadExtension(fileContent, filename, targetType = null) {
             savePath = path.join(finalDir, `${namePart}_${counter}.json`);
             counter++;
         }
-        
+
         fs.writeFileSync(savePath, content, 'utf-8');
-        
+
         return {
             success: true,
             path: savePath,
@@ -446,7 +450,7 @@ function getStats() {
     const regexList = listExtensions('regex', 'all', '');
     const scriptsList = listExtensions('scripts', 'all', '');
     const qrList = listExtensions('quick_replies', 'all', '');
-    
+
     return {
         regex: {
             total: regexList.length,
