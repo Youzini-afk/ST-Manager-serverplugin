@@ -107,7 +107,8 @@ function listExtensions(mode = 'regex', filterType = 'all', search = '') {
                             name,
                             filename: f,
                             type: 'global',
-                            path: path.relative(dataRoot, fullPath).replace(/\\/g, '/'),
+                            // 路径相对于 pluginDataDir，方便 /api/read_file_content 解析
+                            path: path.relative(pluginDataDir, fullPath).replace(/\\/g, '/'),
                             mtime: stat.mtimeMs,
                             size: stat.size,
                         };
@@ -170,7 +171,8 @@ function listExtensions(mode = 'regex', filterType = 'all', search = '') {
                                     filename: f,
                                     type: 'resource',
                                     sourceFolder: folder,
-                                    path: path.relative(dataRoot, fullPath).replace(/\\/g, '/'),
+                                    // 路径相对于 pluginDataDir
+                                    path: path.relative(pluginDataDir, fullPath).replace(/\\/g, '/'),
                                     mtime: stat.mtimeMs,
                                     size: stat.size,
                                 };

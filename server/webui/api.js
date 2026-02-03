@@ -750,7 +750,8 @@ function registerRoutes(app, staticDir) {
             const { id, source_type, file_path, preview_limit, force_full } = req.body || {};
             const wb = worldInfo.getWorldbook(id || file_path);
             if (wb) {
-                res.json({ success: true, data: wb });
+                // 前端期望 data 是世界书的原始 JSON 内容，不是包装对象
+                res.json({ success: true, data: wb.data });
             } else {
                 res.json({ success: false, error: '世界书不存在' });
             }
@@ -818,7 +819,27 @@ function registerRoutes(app, staticDir) {
         try {
             const preset = presets.getPreset(req.params.id);
             if (preset) {
-                res.json({ success: true, data: preset });
+                // 前端期望 res.preset 包含完整预设数据
+                // 需要构造与 Python 后端兼容的格式
+                const presetResponse = {
+                    id: preset.id,
+                    name: preset.filename.replace('.json', ''),
+                    filename: preset.filename,
+                    type: preset.type,
+                    path: preset.path,
+                    mtime: preset.mtime,
+                    file_size: preset.size,
+                    // 分组数据
+                    samplers: preset.samplers || {},
+                    extensions: (preset.data || {}).extensions || {},
+                    // prompts 从原始数据提取
+                    prompts: (preset.data || {}).prompts || [],
+                    // 原始数据
+                    raw_data: preset.data,
+                    // 正则统计
+                    regex_count: preset.regexScripts ? preset.regexScripts.length : 0,
+                };
+                res.json({ success: true, preset: presetResponse });
             } else {
                 res.json({ success: false, error: '预设不存在' });
             }
@@ -846,6 +867,40 @@ function registerRoutes(app, staticDir) {
             });
         } catch (e) {
             res.json({ success: false, error: e.message, items: [], total: 0 });
+        }
+    });
+
+    // 读取文件内容 (用于扩展编辑器)
+    app.post('/api/read_file_content', (req, res) => {
+        try {
+            const { path: filePath } = req.body || {};
+            if (!filePath) {
+                return res.json({ success: false, msg: '缺少文件路径' });
+            }
+
+            // 解析路径：如果是相对路径，基于插件数据目录
+            const pluginDataDir = config ? config.getPluginDataDir() : path.join(__dirname, '..', '..', 'data');
+            let fullPath = filePath;
+            if (!path.isAbsolute(filePath)) {
+                fullPath = path.join(pluginDataDir, filePath);
+            }
+
+            // 安全检查：确保路径在允许的目录内
+            const normalizedPath = path.normalize(fullPath);
+            if (!fs.existsSync(normalizedPath)) {
+                return res.json({ success: false, msg: '文件不存在' });
+            }
+
+            const content = fs.readFileSync(normalizedPath, 'utf-8');
+            try {
+                const data = JSON.parse(content);
+                res.json({ success: true, data });
+            } catch (e) {
+                // 如果不是有效的 JSON，返回原始文本
+                res.json({ success: true, data: content, isRaw: true });
+            }
+        } catch (e) {
+            res.json({ success: false, msg: e.message });
         }
     });
 
