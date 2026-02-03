@@ -1,0 +1,129 @@
+<!-- === 模式 1: 角色卡网格 === -->
+<div x-show="currentMode === 'cards'" x-data="cardGrid" class="flex-1 flex flex-col overflow-hidden w-full">
+
+    <!-- 滚动区域 -->
+    <div class="card-scroll-area custom-scrollbar relative flex-1" id="main-scroll" @click="selectedIds = []"
+        @dragenter.prevent="handleMainDragEnter($event)" @dragover.prevent="dragOverMain = true"
+        @dragleave.prevent="handleMainDragLeave($event)"
+        @drop.prevent="handleMainDragLeave($event); handleFilesDrop($event, null)">
+
+        <!-- 拖拽上传遮罩 -->
+        <div x-show="dragOverMain" x-transition.opacity class="drag-over-main-overlay">
+            <div class="text-6xl mb-4">📂</div>
+            <div class="text-2xl font-bold text-white tracking-wider">松开鼠标上传卡片</div>
+            <div class="text-gray-300 mt-2 text-sm">将添加到当前目录</div>
+        </div>
+
+        <div x-show="isLoading" style="text-align: center; padding: 5rem; color: var(--accent-light);">
+            数据加载中...</div>
+
+        <div x-show="!isLoading" class="card-grid">
+            <template x-for="card in paginatedCards" :key="card.id" @click="selectedIds = []">
+                <!-- ... (角色卡模板内容保持不变) ... -->
+                <div class="st-card group"
+                    :data-card-id="card.id"
+                    :class="{'selected': selectedIds.includes(card.id), 'is-favorite': card.is_favorite, 'card-highlight-anim': highlightId === card.id}"
+                    x-effect="if(highlightId === card.id) $el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
+                    @click.stop="handleCardClick($event, card)" draggable="true" @dragstart="dragStart($event, card)">
+
+                    <button @click.stop="toggleCardFav(card)"
+                        class="absolute z-30 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm backdrop-blur-md border transform scale-90 group-hover:scale-100"
+                        :class="[
+                            card.is_favorite ? 'bg-yellow-400 text-black border-yellow-200 shadow-[0_0_10px_rgba(251,191,36,0.5)]' : 'bg-black/40 border-white/20 text-white/50 hover:bg-black/60 hover:text-white',
+                            $store.global.deviceType === 'mobile' ? 'top-1 right-1 w-6 h-6 opacity-100' : 'top-2 right-2 w-8 h-8 opacity-0 group-hover:opacity-100'
+                        ]">
+                        <span class="text-lg font-bold" x-text="card.is_favorite ? '★' : '☆'"></span>
+                    </button>
+                    <!-- 选择勾选框 -->
+                    <div class="absolute z-30 cursor-pointer transition-opacity"
+                        :class="[
+                            selectedIds.includes(card.id) ? 'opacity-100' : $store.global.deviceType === 'mobile' ? 'opacity-60' : 'opacity-0',
+                            $store.global.deviceType === 'mobile' ? 'top-1 left-1' : 'top-2 left-2 opacity-0 group-hover:opacity-100'
+                        ]"
+                        @click.stop="toggleSelection(card)">
+                        <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 shadow-md backdrop-blur-sm"
+                            :class="selectedIds.includes(card.id) ? 'bg-blue-600 border-blue-500 text-white scale-110' : 'bg-black/40 border-gray-400/50 hover:bg-black/60 hover:border-white'">
+                            <span x-show="selectedIds.includes(card.id)" class="text-xs font-bold">✓</span>
+                        </div>
+                    </div>
+                    <div x-show="card.is_favorite"
+                        class="absolute top-0 left-0 z-20 w-0 h-0 border-t-[32px] border-r-[32px] border-t-yellow-500 border-r-transparent opacity-90 pointer-events-none drop-shadow-md">
+                        <span class="absolute -top-[30px] left-[2px] text-[10px]">★</span>
+                    </div>
+                    <div class="card-image-container">
+                        <img :src="card.thumb_url" loading="lazy"
+                            onerror="this.onerror=null; this.src='/static/images/default_card.png';">
+                        <!-- 右上角徽章 -->
+                        <div
+                            style="position: absolute; top: 0.5rem; right: 2.5rem; z-index: 10; display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; pointer-events: none;">
+                            <div x-show="card.is_bundle"
+                                style="background: rgba(0,0,0,0.75); color: #fbbf24; border: 1px solid #fbbf24; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;">
+                                📦 v<span x-text="card.versions ? card.versions.length : 0"></span>
+                            </div>
+                            <div x-show="card.char_version && card.char_version.trim() !== ''"
+                                :title="card.char_version"
+                                style="background: rgba(15, 23, 42, 0.7); color: #bae6fd; border: 1px solid #38bdf8; border-radius: 4px; padding: 1px 5px; font-size: 10px; backdrop-filter: blur(2px); max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: auto;">
+                                <span x-text="card.char_version"></span>
+                            </div>
+                        </div>
+                        <!-- Link 标记 -->
+                        <a x-show="card.source_link" :href="card.source_link" target="_blank" @click.stop title="访问来源页面"
+                            style="position: absolute; bottom: 2.5rem; right: 0.5rem; z-index: 10; background: rgba(37, 99, 235, 0.9); color: white; width: 1.5rem; height: 1.5rem; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.5);">
+                            🌐
+                        </a>
+                        <!-- Token 计数 -->
+                        <div x-show="card.token_count > 0"
+                            :class="card.token_count > 20000 ? 'text-red-300 border-red-500/50 bg-red-900/80' : (card.token_count > 5000 ? 'text-yellow-300 border-yellow-500/50 bg-yellow-900/80' : 'text-green-300 border-green-500/50 bg-green-900/80')"
+                            style="position: absolute; bottom: 2rem; left: 0.5rem; z-index: 10; border: 1px solid; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: bold; backdrop-filter: blur(2px); pointer-events: none;">
+                            🪙 <span class="text-neon" x-text="card.token_count"></span> T
+                        </div>
+                        <!-- 卡片名称渐变层 -->
+                        <div
+                            style="position: absolute; bottom: 0; left: 0; right: 0; padding: 0.5rem; background: linear-gradient(to top, #000, transparent);">
+                            <h3 style="font-weight: bold; color: white; font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; text-shadow: 0 1px 2px black;"
+                                x-text="card.char_name"></h3>
+                        </div>
+                    </div>
+
+                    <div class="card-info">
+                        <div style="display: flex; gap: 0.25rem; overflow: hidden; height: 1.25rem; flex-shrink: 0;">
+                            <template x-for="tag in card.tags.slice(0,3)" :key="tag"><span class="card-tag"
+                                    x-text="tag"></span></template>
+                            <!-- 只有当有备注内容时才显示查看按钮 -->
+                            <button x-show="card.ui_summary" @click.stop="openMarkdownView(card.ui_summary)"
+                                title="查看 Markdown 备注" class="btn-note-preview">
+                                📄
+                            </button>
+                        </div>
+                        <div x-show="$store.global.deviceType !== 'mobile'" class="local-note-preview custom-scrollbar"
+                            :class="card.ui_summary ? 'note-text' : 'note-placeholder'" @click.stop title="本地备注"
+                            x-text="card.ui_summary || '无本地备注...'"></div>
+                        <p x-show="$store.global.deviceType !== 'mobile'" style="font-size: 10px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; flex-shrink: 0;"
+                            x-text="card.filename"></p>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <div x-show="!isLoading && paginatedCards.length===0"
+            style="text-align: center; padding: 5rem; color: var(--text-dim);">
+            <p style="font-size: 1.125rem;">未找到卡片</p>
+            <p class="text-sm mt-2">（也可以直接拖拽文件到这里上传）</p>
+        </div>
+    </div>
+
+    <!-- 底部翻页栏 (Fixed in Cards Mode) -->
+    <div class="pagination-bar" x-show="filteredCards.length>0" style="flex-shrink: 0;">
+        <span style="font-size: 0.75rem; color: var(--text-dim);">共 <span x-text="totalItems"></span>
+            张</span>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <button @click="changePage(currentPage-1)" :disabled="currentPage===1" class="btn-secondary"
+                style="padding: 0.25rem 0.5rem;">上一页</button>
+            <span
+                style="padding: 0.25rem 0.5rem; background: var(--bg-sub); border-radius: 0.25rem; color: var(--text-main); font-size: 0.75rem; height: 100%;"
+                x-text="currentPage + '/' + totalPages"></span>
+            <button @click="changePage(currentPage+1)" :disabled="currentPage===totalPages" class="btn-secondary"
+                style="padding: 0.25rem 0.5rem;">下一页</button>
+        </div>
+    </div>
+</div>

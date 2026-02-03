@@ -1,0 +1,34 @@
+<!-- 标签选择器 (小) -->
+<div x-show="showTagPicker" x-data="tagPicker" x-cloak class="modal-overlay z-modal-popover" @click.stop>
+    <div class="tag-modal-container" style="height: 70vh; width: 800px; max-width: 95vw;"
+        @click.away="showTagPicker=false">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-light); padding-bottom: 1rem;">
+            <div>
+                <h3 style="font-size: 1.25rem; font-weight: bold;">选择标签</h3>
+                <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem;">点击添加或移除，修改将自动应用到暂存区</p>
+            </div>
+            <button @click="showTagPicker=false"
+                style="color: var(--text-dim); font-size: 1.5rem; background: none; border: none; cursor: pointer;">✕</button>
+        </div>
+        <input type="text" x-model="tagPickerSearch" placeholder="搜索可用标签..." class="form-input"
+            style="margin-bottom: 1rem; padding: 0.75rem; font-size: 1rem;">
+        <div class="tag-cloud-container custom-scrollbar"
+            style="background: rgba(0,0,0,0.1); border-radius: 0.5rem; border: 1px solid var(--border-light);">
+            <template x-for="tag in filteredTagPickerPool" :key="tag">
+                <button @click="toggleEditTag(tag)" class="tag-chip-btn"
+                    :class="tagsRef && tagsRef.includes(tag) ? 'tag-chip-selected-purple' : 'tag-chip-unselected'">
+                    <span x-text="tag"></span>
+                    <span x-show="tagsRef && tagsRef.includes(tag)"
+                        style="margin-left: 0.4rem; font-weight: bold;">+</span>
+                </button>
+            </template>
+            <div x-show="filteredTagPickerPool.length === 0"
+                style="width: 100%; text-align: center; color: var(--text-dim); padding: 2rem;">没有找到匹配的标签</div>
+        </div>
+        <div style="margin-top: 1rem; text-align: right; border-top: 1px solid var(--border-light); padding-top: 1rem;">
+            <button @click="showTagPicker=false" class="btn-primary"
+                style="padding: 0.5rem 1.5rem; border-radius: 0.5rem;">完成并返回</button>
+        </div>
+    </div>
+</div>

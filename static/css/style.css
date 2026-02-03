@@ -1,0 +1,19 @@
+@import "modules/variables.css";
+
+@import "modules/base.css";
+
+@import "modules/components.css";
+
+@import "modules/layout.css";
+
+@import "modules/view-cards.css";
+
+@import "modules/view-wi.css";
+
+@import "modules/modal-detail.css";
+
+@import "modules/modal-settings.css";
+
+@import "modules/modal-tools.css";
+
+@import "modules/modal-automation.css";

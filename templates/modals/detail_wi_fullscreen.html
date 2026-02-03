@@ -1,0 +1,585 @@
+<!-- 全屏世界书编辑器 (UI Refactored & Bug Fixed) -->
+<div x-show="showFullScreenWI" x-data="wiEditor" x-cloak class="detail-wi-full-screen fixed inset-0 z-modal-editor wi-editor-container"
+    @click.self="showFullScreenWI=false">
+
+    <!-- 内部布局状态管理 -->
+    <div class="flex flex-col h-full w-full overflow-hidden"
+        x-data="{ rightTab: 'settings', showLeftList: $store.global.deviceType !== 'mobile', showRightPanel: $store.global.deviceType !== 'mobile' }">
+
+        <!-- 1. 顶部导航栏 -->
+        <div class="h-12 border-b items-center justify-between px-4 shadow-sm flex-shrink-0 z-20"
+            :class="$store.global.deviceType === 'mobile' ? '' : 'flex'"
+            style="background: var(--bg-panel); border-color: var(--border-main);">
+
+            <div class="flex items-center gap-4 min-w-0">
+                <!-- 标题/Logo -->
+                <div class="flex items-center gap-2 text-orange-400 font-bold select-none cursor-default">
+                    <span>🌎</span> <span class="hidden md:inline">编辑器</span>
+                </div>
+
+                <!-- 来源标记 (Badge) - 使用 template x-if 防止初始化报错 -->
+                <template x-if="editingWiFile">
+                    <div class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase border bg-opacity-10"
+                        :class="{
+                            'bg-blue-500 border-blue-500 text-blue-400': editingWiFile.type === 'global',
+                            'bg-green-500 border-green-500 text-green-400': editingWiFile.type === 'resource',
+                            'bg-purple-500 border-purple-500 text-purple-400': editingWiFile.type === 'embedded'
+                        }">
+                        <span x-text="editingWiFile.type"></span>
+                    </div>
+                </template>
+
+                <div class="h-4 w-[1px] bg-[var(--border-light)]"></div>
+
+                <!-- 标题输入框 -->
+                <div class="flex items-center gap-2">
+                    <span x-show="!editingWiFile && activeCard" class="text-xs text-gray-500 truncate max-w-[100px]"
+                        x-text="activeCard ? activeCard.char_name + ' /' : ''"></span>
+
+                    <template x-if="editingData && editingData.character_book">
+                        <input type="text" x-model="editingData.character_book.name"
+                            class="bg-transparent text-sm font-bold border-b border-transparent hover:border-gray-500 focus:border-accent-main outline-none transition-colors w-40 md:w-64"
+                            placeholder="世界书名称...">
+                    </template>
+                </div>
+            </div>
+
+            <!-- 右侧按钮组 -->
+            <div class="flex items-center gap-2" :class="$store.global.deviceType === 'mobile' ? 'justify-end' : ''">
+                <!-- Token 统计 -->
+                <div class="hidden lg:flex flex-col items-end mr-4 px-3 border-r border-[var(--border-light)]"
+                    title="预估总 Token">
+                    <span class="text-[9px] text-gray-500 uppercase font-bold">Tokens</span>
+                    <span class="text-xs font-mono font-bold text-neon"
+                        :class="(typeof getTotalWiTokens === 'function' && getTotalWiTokens() > 10000) ? 'text-red-400' : 'text-green-400'"
+                        x-text="typeof getTotalWiTokens === 'function' ? getTotalWiTokens() : 0">
+                    </span>
+                </div>
+
+                <div class="hidden lg:flex items-center gap-2 mr-2" x-show="activeEditorEntry">
+                    <span class="wi-pill mono" :class="activeEditorEntry?.enabled ? 'on' : 'off'"
+                        x-text="activeEditorEntry?.enabled ? 'EN' : 'OFF'"></span>
+
+                    <span class="wi-pill"
+                        :class="activeEditorEntry?.constant ? 'const' : (activeEditorEntry?.vectorized ? 'vector' : 'normal')"
+                        x-text="activeEditorEntry?.constant ? 'Constant' : (activeEditorEntry?.vectorized ? 'Vector' : 'Normal')"></span>
+
+                    <span class="wi-pill mono" x-text="'#' + (activeEditorEntry?.insertion_order ?? 0)"></span>
+                </div>
+
+                <!-- 1. 时光机 -->
+                <button @click="openRollback && openRollback()" class="wi-action-btn" title="时光机：查看历史版本与回滚">⏪</button>
+
+                <!-- 2. 快照 -->
+                <button @click="createSnapshot('lorebook')" @contextmenu.prevent="createKeySnapshot('lorebook')"
+                    class="wi-action-btn"
+                    :title="(!editingWiFile || editingWiFile.type === 'embedded') ? '备份当前角色 (左键: 普通 | 右键: 关键节点)' : '备份当前世界书 (左键: 普通 | 右键: 关键节点)'">
+                    📸
+                </button>
+
+                <!-- 3. 打开备份文件夹 -->
+                <button @click="openBackupFolder('lorebook')" class="wi-action-btn" title="打开备份文件夹">📂</button>
+
+                <div class="h-4 w-[1px] bg-[var(--border-light)] mx-1"></div>
+
+                <!-- 4. 保存按钮组 -->
+                <div class="flex items-center gap-2">
+                    <!-- 场景 A: 编辑独立文件 (显示保存文件 + 另存为) -->
+                    <template x-if="editingWiFile && editingWiFile.type !== 'embedded'">
+                        <div class="flex items-center gap-2">
+                            <button @click="saveWiFileChanges()"
+                                class="btn-primary px-4 py-1.5 rounded text-xs font-bold shadow-lg flex items-center gap-2 whitespace-nowrap transition-all hover:brightness-110">
+                                <span>💾</span>
+                                <span x-show="$store.global.deviceType !== 'mobile'"> 保存文件</span>
+                            </button>
+                            <button @click="saveAsGlobalWi()"
+                                class="btn-secondary px-3 py-1.5 text-xs rounded whitespace-nowrap" title="另存为新文件">
+                                <span>📤</span>
+                                <span x-show="$store.global.deviceType !== 'mobile'"> 另存为...</span>
+                            </button>
+                        </div>
+                    </template>
+
+                    <!-- 场景 B: 编辑卡片内嵌 (显示保存到卡片 + 另存为全局) -->
+                    <template x-if="!editingWiFile || editingWiFile.type === 'embedded'">
+                        <div class="flex items-center gap-2">
+                            <button @click="saveChanges()" :disabled="isSaving"
+                                class="btn-primary px-4 py-1.5 rounded text-xs font-bold shadow-lg flex items-center gap-2 whitespace-nowrap transition-all hover:brightness-110">
+                                <span x-show="isSaving" class="animate-spin">⏳</span>
+                                <span>💾</span>
+                                <span x-show="$store.global.deviceType !== 'mobile'"> 保存到卡片</span>
+                            </button>
+                            <button @click="saveAsGlobalWi()"
+                                class="btn-secondary px-3 py-1.5 text-xs rounded whitespace-nowrap" title="提取为全局世界书">
+                                <span>📤</span>
+                                <span x-show="$store.global.deviceType !== 'mobile'"> 另存为全局</span>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+                <button @click="showFullScreenWI=false"
+                    class="btn-secondary px-3 py-1.5 text-xs rounded hover:bg-red-500/20 hover:text-red-400 ml-2">
+                    ✕
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. 主体区域 -->
+        <div class="flex-1 flex overflow-hidden relative">
+
+            <!-- === 左侧列表 === -->
+            <div class="flex flex-col border-r transition-all duration-300 ease-in-out bg-[var(--bg-sub)] relative"
+                :style="{ width: showLeftList ? '260px' : '0px', opacity: showLeftList ? '1' : '0' }"
+                style="border-color: var(--border-main);">
+
+                <div class="p-2 border-b border-[var(--border-light)] flex-shrink-0">
+                    <button @click="addWiEntry()"
+                        class="w-full bg-green-600/10 text-green-500 border border-green-600/30 py-1.5 rounded text-xs hover:bg-green-600/20 font-bold transition-all flex items-center justify-center gap-1">
+                        <span>+</span> 新增条目
+                    </button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                    <!-- 使用 Optional Chain 风格的检查防止初始化空指针 -->
+                    <template x-for="(entry, index) in (typeof getWIArrayRef === 'function' ? getWIArrayRef() : [])"
+                        :key="entry.id || index">
+                        <div :id="'wi-item-' + index" @click="selectMainWiItem(index)" draggable="true"
+                            @dragstart="wiDragStart($event, index)" @drop="wiDrop($event, index)"
+                            @dragover="wiDragOver($event, index)"
+                            class="wi-list-item p-2 rounded cursor-pointer group relative text-xs select-none border border-transparent"
+                            :data-type="entry.constant ? 'const' : (entry.vectorized ? 'vector' : 'normal')"
+                            :class="currentWiIndex === index ? 'active' : ''">
+
+                            <div class="flex justify-between items-center mb-1">
+                                <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                    <div class="w-2 h-2 rounded-full flex-shrink-0 shadow-sm" :class="{
+                                             'bg-blue-500 shadow-blue-500/50': entry.constant,
+                                             'bg-purple-500 shadow-purple-500/50': !entry.constant && entry.vectorized,
+                                             'bg-green-500 shadow-green-500/50': !entry.constant && !entry.vectorized && entry.enabled,
+                                             'bg-gray-600': !entry.enabled
+                                         }"></div>
+                                    <span class="font-bold truncate"
+                                        :class="currentWiIndex === index ? 'text-[var(--text-main)]' : 'text-[var(--text-sub)]'"
+                                        x-text="entry.comment || '无标题'"></span>
+                                </div>
+                                <input type="checkbox" x-model="entry.enabled" @click.stop
+                                    class="cursor-pointer accent-accent-main">
+                            </div>
+
+                            <div class="text-[10px] opacity-60 font-mono truncate pl-4">
+                                <div class="flex items-center justify-between mt-0.5">
+                                    <!-- Keys 显示 -->
+                                    <span class="text-[10px] opacity-60 font-mono truncate max-w-[160px]"
+                                        x-text="entry.constant ? 'Constant' : (entry.vectorized ? 'Vectorized' : (typeof formatWiKeys === 'function' ? formatWiKeys(entry.keys) : entry.keys))">
+                                    </span>
+
+                                    <!-- 权重标记 -->
+                                    <span
+                                        class="text-[9px] font-mono bg-black/10 dark:bg-white/10 px-1.5 rounded text-gray-500 ml-1 flex-shrink-0"
+                                        title="插入权重 (Insertion Order)">
+                                        #<span x-text="entry.insertion_order"></span>
+                                    </span>
+                                </div>
+                                <div class="wi-li-preview text-[10px] opacity-50 truncate pl-4 mt-0.5"
+                                    x-text="(entry.content || '').replace(/\n/g,' ').slice(0, 90)">
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="p-1 border-t border-[var(--border-light)] flex justify-center bg-[var(--bg-sub)]">
+                    <button @click="showLeftList = false"
+                        class="text-[10px] text-gray-500 hover:text-[var(--text-main)] w-full">◀ 收起列表</button>
+                </div>
+            </div>
+
+            <!-- 列表展开悬浮按钮 -->
+            <div x-show="!showLeftList" class="wi-toggle-btn-float left" @click="showLeftList = true" title="展开列表">▶
+            </div>
+
+            <!-- === 中间：沉浸式编辑区 === -->
+            <div class="wi-center-pane">
+                <!-- 这里的 x-if 是关键：只有 activeEditorEntry 存在时，内部 DOM 才会被创建 -->
+                <!-- 注意：移除了 x-data="{ entry: ... }"，直接使用 activeEditorEntry -->
+                <template x-if="activeEditorEntry">
+                    <div class="flex flex-col h-full">
+
+                        <div class="p-4 pb-2 flex-shrink-0 flex items-center gap-4 transition-all duration-300 border-b"
+                            :class="isEditingClipboard ? 'bg-purple-900/10 border-purple-500/30' : 'bg-transparent border-transparent'">
+
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <label class="text-[10px] uppercase font-bold tracking-wider block"
+                                        :class="isEditingClipboard ? 'text-purple-400' : 'text-gray-500'">
+                                        <span
+                                            x-text="isEditingClipboard ? '📋 正在编辑剪切板条目 (Clipboard Item)' : '备注 (Comment)'"></span>
+                                    </label>
+
+                                    <!-- 剪切板模式徽章 -->
+                                    <span x-show="isEditingClipboard"
+                                        class="text-[9px] px-1.5 py-0.5 rounded bg-purple-500 text-white font-bold animate-pulse">
+                                        EDITING
+                                    </span>
+                                </div>
+
+                                <input type="text" x-model="activeEditorEntry.comment"
+                                    class="w-full bg-transparent text-lg font-bold border-b outline-none transition-colors p-1"
+                                    :class="isEditingClipboard 
+                    ? 'border-purple-500/30 focus:border-purple-500 placeholder-purple-300/50' 
+                    : 'border-transparent focus:border-[var(--accent-main)]'" placeholder="输入条目备注...">
+                            </div>
+
+                            <!-- 按钮组：根据模式切换 -->
+                            <div class="flex gap-2">
+
+                                <!-- 场景 A: 剪切板模式 (显示保存/返回) -->
+                                <template x-if="isEditingClipboard">
+                                    <div class="flex gap-2">
+                                        <button @click="exitClipboardEdit()"
+                                            class="wi-action-btn w-auto px-3 gap-1 hover:bg-gray-500/20 text-gray-500 border border-transparent hover:border-gray-500/30"
+                                            title="取消编辑并返回">
+                                            <span>↩</span> <span class="text-xs font-bold">返回</span>
+                                        </button>
+                                        <button @click="saveClipboardItem()"
+                                            class="wi-action-btn w-auto px-3 gap-1 bg-purple-600 hover:bg-purple-500 text-white shadow-sm hover:shadow-purple-500/20"
+                                            title="保存对剪切板条目的修改">
+                                            <span>💾</span> <span class="text-xs font-bold">保存</span>
+                                        </button>
+                                    </div>
+                                </template>
+
+                                <!-- 场景 B: 普通模式 (显示删除/复制) -->
+                                <template x-if="!isEditingClipboard">
+                                    <div class="flex gap-2">
+                                        <button @click.stop="removeWiEntry(currentWiIndex)" title="删除条目"
+                                            class="wi-action-btn hover:text-red-400 hover:bg-red-500/10">
+                                            🗑️
+                                        </button>
+                                        <button @click.stop="copyWiToClipboard(activeEditorEntry)" title="复制到剪切板"
+                                            class="wi-action-btn hover:text-purple-400 hover:bg-purple-500/10">
+                                            📋
+                                        </button>
+                                    </div>
+                                </template>
+
+                            </div>
+                        </div>
+
+                        <div class="wi-content-wrapper relative" :class="{'bg-purple-900/5': isEditingClipboard}">
+                            <label
+                                class="text-neon absolute top-2 right-6 z-10 text-[10px] px-2 py-0.5 rounded border pointer-events-none opacity-80"
+                                :class="isEditingClipboard ? 'text-purple-400 bg-purple-900/20 border-purple-500/30' : 'text-gray-500 bg-[var(--bg-panel)] border-[var(--border-light)]'">
+                                CONTENT <span
+                                    x-text="typeof estimateTokens === 'function' ? ('(' + estimateTokens(activeEditorEntry.content) + ' T)') : ''"></span>
+                            </label>
+
+                            <textarea x-model="activeEditorEntry.content" class="wi-main-textarea custom-scrollbar"
+                                :class="{'border-purple-500/30 focus:border-purple-500': isEditingClipboard}"
+                                placeholder="在此输入世界书内容..."></textarea>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="!activeEditorEntry">
+                    <div class="flex-1 flex flex-col items-center justify-center text-gray-600 gap-4 select-none">
+                        <div class="text-6xl opacity-20">📝</div>
+                        <p>请从左侧选择一个条目开始编辑</p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- === 右侧：属性面板 === -->
+            <div class="wi-inspector-panel custom-scrollbar"
+                :style="{ width: showRightPanel ? '320px' : '0px', opacity: showRightPanel ? '1' : '0' }">
+
+                <div class="wi-inspector-tabs">
+                    <div class="wi-tab-btn" :class="rightTab==='settings' && 'active'" @click="rightTab='settings'">⚙️
+                        属性设置</div>
+                    <div class="wi-tab-btn" :class="rightTab==='clipboard' && 'active'" @click="rightTab='clipboard'">📋
+                        剪切板</div>
+                    <button @click="showRightPanel = false"
+                        class="px-3 text-gray-500 hover:text-red-400 border-l border-[var(--border-light)]">✕</button>
+                </div>
+
+                <!-- Tab 1: Settings Inspector -->
+                <!-- 关键修复：使用 template x-if 确保 activeEditorEntry 存在，且 rightTab 匹配时才渲染 -->
+                <template x-if="rightTab==='settings' && activeEditorEntry">
+                    <div class="wi-inspector-content">
+
+                        <!-- 1. 触发策略 -->
+                        <div class="props-group">
+                            <div class="props-header text-blue-400">触发策略 (Strategy)</div>
+                            <div class="props-body">
+                                <div class="flex gap-2">
+                                    <label
+                                        class="flex-1 flex flex-col items-center justify-center p-2 rounded border cursor-pointer transition-all"
+                                        :class="activeEditorEntry.constant ? 'bg-blue-500/10 border-blue-500 text-blue-400' : 'border-[var(--border-light)] hover:bg-[var(--bg-hover)]'">
+                                        <input type="checkbox" x-model="activeEditorEntry.constant"
+                                            @change="if(activeEditorEntry.constant) activeEditorEntry.vectorized = false"
+                                            class="hidden">
+                                        <span class="text-lg">🔵</span>
+                                        <span class="text-[10px] mt-1 font-bold">常驻 (Constant)</span>
+                                    </label>
+                                    <label
+                                        class="flex-1 flex flex-col items-center justify-center p-2 rounded border cursor-pointer transition-all"
+                                        :class="activeEditorEntry.vectorized ? 'bg-purple-500/10 border-purple-500 text-purple-400' : 'border-[var(--border-light)] hover:bg-[var(--bg-hover)]'">
+                                        <input type="checkbox" x-model="activeEditorEntry.vectorized"
+                                            @change="if(activeEditorEntry.vectorized) activeEditorEntry.constant = false"
+                                            class="hidden">
+                                        <span class="text-lg">📎</span>
+                                        <span class="text-[10px] mt-1 font-bold">向量化 (Vector)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. 关键词 (使用 template x-if 处理内部逻辑显示) -->
+                        <template x-if="!activeEditorEntry.constant && !activeEditorEntry.vectorized">
+                            <div class="props-group">
+                                <div class="props-header text-green-400">关键词 (Keywords)</div>
+                                <div class="props-body space-y-3">
+                                    <div>
+                                        <label class="text-[10px] text-gray-500 block mb-1">主触发词 (Primary Keys)</label>
+                                        <textarea
+                                            :value="(activeEditorEntry && typeof formatWiKeys === 'function') ? formatWiKeys(activeEditorEntry.keys) : (activeEditorEntry?.keys || '')"
+                                            @input="activeEditorEntry && (typeof updateWiKeys === 'function' ? updateWiKeys(activeEditorEntry, $event.target.value) : (activeEditorEntry.keys = $event.target.value.split(',')))"
+                                            class="w-full bg-[var(--bg-body)] border border-[var(--border-light)] rounded p-2 text-xs font-mono text-yellow-500 focus:border-yellow-500 outline-none resize-none h-16"
+                                            placeholder="key1, key2..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] text-gray-500 block mb-1">次要/过滤词 (Filter Keys)</label>
+                                        <textarea
+                                            :value="(activeEditorEntry && typeof formatWiKeys === 'function') ? formatWiKeys(activeEditorEntry.secondary_keys) : (activeEditorEntry?.secondary_keys || '')"
+                                            @input="activeEditorEntry && (activeEditorEntry.secondary_keys = $event.target.value.split(',').map(s=>s.trim()).filter(s=>s))"
+                                            class="w-full bg-[var(--bg-body)] border border-[var(--border-light)] rounded p-2 text-xs font-mono text-teal-500 focus:border-teal-500 outline-none resize-none h-12"
+                                            placeholder="可选过滤词..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- 3. 插入设置 -->
+                        <div class="props-group">
+                            <div class="props-header text-orange-400">插入设置 (Insertion)</div>
+                            <div class="props-body text-xs space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">位置 (Position)</span>
+                                    <select x-model.number="activeEditorEntry.position"
+                                        class="bg-[var(--bg-body)] border border-[var(--border-light)] rounded px-2 py-1 max-w-[140px]">
+                                        <option value="0">0 - 角色定义前 (Before Char)</option>
+                                        <option value="1">1 - 角色定义后 (After Char)</option>
+                                        <option value="2">2 - 作者注释前 (Before AN)</option>
+                                        <option value="3">3 - 作者注释后 (After AN)</option>
+                                        <option value="5">5 - 示例消息前 (Before EM)</option>
+                                        <option value="6">6 - 示例消息后 (After EM)</option>
+                                        <option value="4">4 - @层级 (At Depth)</option>
+                                        <option value="7">7 - 输出端 (Outlet)</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">权重 (Order)</span>
+                                    <input type="number" x-model.number="activeEditorEntry.insertion_order"
+                                        class="w-16 bg-[var(--bg-body)] border border-[var(--border-light)] rounded px-2 py-1 text-center">
+                                </div>
+                                <template x-if="activeEditorEntry.position === 4">
+                                    <div
+                                        class="pt-2 border-t border-[var(--border-light)] flex items-center justify-between">
+                                        <span class="text-gray-500">深度 (Depth)</span>
+                                        <input type="number" x-model.number="activeEditorEntry.depth"
+                                            class="w-16 bg-[var(--bg-body)] border border-[var(--border-light)] rounded px-2 py-1 text-center">
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="props-group">
+                            <div class="props-header text-pink-400">递归与流程 (Recursion)</div>
+                            <div class="props-body text-xs space-y-2">
+                                <label
+                                    class="flex items-center gap-2 cursor-pointer p-1 hover:bg-[var(--bg-hover)] rounded">
+                                    <input type="checkbox" x-model="activeEditorEntry.excludeRecursion"
+                                        class="accent-pink-500">
+                                    <span>不可递归 (Exclude Recursion)</span>
+                                </label>
+
+                                <label
+                                    class="flex items-center gap-2 cursor-pointer p-1 hover:bg-[var(--bg-hover)] rounded">
+                                    <input type="checkbox" x-model="activeEditorEntry.preventRecursion"
+                                        class="accent-pink-500">
+                                    <span>阻止后续递归 (Prevent Recursion)</span>
+                                </label>
+
+                                <label
+                                    class="flex items-center gap-2 cursor-pointer p-1 hover:bg-[var(--bg-hover)] rounded">
+                                    <input type="checkbox" x-model="activeEditorEntry.ignoreBudget"
+                                        class="accent-red-500">
+                                    <span class="text-red-400">无视限额 (Ignore Budget)</span>
+                                </label>
+
+                                <div
+                                    class="flex items-center justify-between mt-1 pt-1 border-t border-[var(--border-light)]">
+                                    <span class="text-gray-500">延迟递归等级</span>
+                                    <input type="number" x-model.number="activeEditorEntry.delayUntilRecursion"
+                                        placeholder="0"
+                                        class="w-12 bg-[var(--bg-body)] border border-[var(--border-light)] rounded px-1 text-center">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. 逻辑与过滤 -->
+                        <div class="props-group" x-data="{ expanded: false }">
+                            <div class="props-header cursor-pointer hover:bg-[var(--bg-hover)]"
+                                @click="expanded = !expanded">
+                                <span class="text-purple-400">高级逻辑 (Logic)</span>
+                                <span x-text="expanded ? '▼' : '▶'" class="text-[10px]"></span>
+                            </div>
+                            <div class="props-body space-y-3" x-show="expanded">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">逻辑模式
+                                        (Logic)</span>
+                                    <select x-model.number="activeEditorEntry.selectiveLogic"
+                                        class="bg-[var(--bg-body)] border border-[var(--border-light)] rounded px-2 py-1.5 text-xs flex-1 min-w-0 hover:border-accent-main transition-colors cursor-pointer"
+                                        :disabled="!activeEditorEntry.selective">
+                                        <option value="0">0 - 任意匹配 (Any/OR)</option>
+                                        <option value="1">1 - 全部匹配 (All/AND)</option>
+                                        <option value="2">2 - 全不匹配 (Not Any/NOR)</option>
+                                        <option value="3">3 - 非全部 (Not All/NAND)</option>
+                                    </select>
+                                </div>
+
+                                <div class="grid grid-cols-1 gap-1 pt-2 border-t border-[var(--border-light)]">
+                                    <label
+                                        class="flex items-center justify-between cursor-pointer p-1.5 hover:bg-[var(--bg-hover)] rounded group transition-colors">
+                                        <span class="text-xs text-gray-400 group-hover:text-gray-200">全词匹配 (Whole
+                                            Words)</span>
+                                        <input type="checkbox" x-model="activeEditorEntry.matchWholeWords"
+                                            class="accent-purple-500 scale-90">
+                                    </label>
+                                    <label
+                                        class="flex items-center justify-between cursor-pointer p-1.5 hover:bg-[var(--bg-hover)] rounded group transition-colors">
+                                        <span class="text-xs text-gray-400 group-hover:text-gray-200">区分大小写 (Case
+                                            Sensitive)</span>
+                                        <input type="checkbox" x-model="activeEditorEntry.caseSensitive"
+                                            class="accent-purple-500 scale-90">
+                                    </label>
+                                    <label
+                                        class="flex items-center justify-between cursor-pointer p-1.5 hover:bg-[var(--bg-hover)] rounded group transition-colors">
+                                        <span class="text-xs text-gray-400 group-hover:text-gray-200">正则模式
+                                            (Regex)</span>
+                                        <input type="checkbox" x-model="activeEditorEntry.use_regex"
+                                            class="accent-purple-500 scale-90">
+                                    </label>
+                                </div>
+
+                                <div class="pt-2 mt-2 border-t border-[var(--border-light)]">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex flex-col">
+                                            <span class="text-xs text-gray-500">触发概率 (Probability)</span>
+                                            <span class="text-[9px] text-gray-600"
+                                                x-text="activeEditorEntry.useProbability ? '✅ 已启用' : '🚫 不生效'"></span>
+                                        </div>
+
+                                        <div class="flex items-center gap-2">
+                                            <!-- 概率数值输入 -->
+                                            <div class="relative flex items-center">
+                                                <input type="number" x-model.number="activeEditorEntry.probability"
+                                                    min="0" max="100" :disabled="!activeEditorEntry.useProbability"
+                                                    class="w-12 bg-[var(--bg-body)] border border-[var(--border-light)] rounded px-1 py-1 text-center text-xs focus:border-accent-main outline-none"
+                                                    :class="{'opacity-50': !activeEditorEntry.useProbability}">
+                                                <span class="ml-1 text-[10px] text-gray-500">%</span>
+                                            </div>
+
+                                            <!-- 启用开关 -->
+                                            <label
+                                                class="cursor-pointer flex items-center justify-center w-6 h-6 hover:bg-[var(--bg-hover)] rounded transition-colors"
+                                                title="启用/禁用概率">
+                                                <input type="checkbox" x-model="activeEditorEntry.useProbability"
+                                                    class="accent-accent-main cursor-pointer w-4 h-4">
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </template>
+
+                <div x-show="rightTab==='settings' && !activeEditorEntry" class="p-6 text-center text-gray-500 text-xs">
+                    没有选中的条目
+                </div>
+
+                <!-- Tab 2: Clipboard -->
+                <div x-show="rightTab==='clipboard'" class="flex-1 flex flex-col h-full overflow-hidden">
+                    <div
+                        class="p-2 border-b border-[var(--border-light)] flex justify-between items-center bg-[var(--bg-panel)]">
+                        <span class="text-xs font-bold text-gray-500">Global Items</span>
+                        <button @click="typeof clearWiClipboard === 'function' && clearWiClipboard()"
+                            class="text-[10px] text-red-400 hover:underline">清空</button>
+                    </div>
+
+                    <div x-show="typeof wiClipboardOverwriteMode !== 'undefined' && wiClipboardOverwriteMode"
+                        class="bg-yellow-500/10 border-b border-yellow-500/30 p-2 text-center" x-transition>
+                        <p class="text-[10px] text-yellow-500 font-bold mb-1">⚠️ 剪切板已满</p>
+                        <p class="text-[10px] opacity-70 mb-1">点击下方条目以覆盖保存</p>
+                        <button @click="wiClipboardOverwriteMode=false"
+                            class="text-[10px] underline hover:text-white">取消</button>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2" @dragover.prevent
+                        @drop.prevent="typeof handleClipboardDropReorder === 'function' && handleClipboardDropReorder($event)">
+
+                        <template
+                            x-for="(item, idx) in (typeof wiClipboardItems !== 'undefined' ? wiClipboardItems : [])"
+                            :key="item.db_id || idx">
+                            <div class="clipboard-item group relative flex flex-col gap-1 p-2 rounded border transition-all cursor-pointer select-none"
+                                :class="(isEditingClipboard && currentClipboardIndex === idx) 
+                                        ? 'border-purple-500 bg-purple-500/10 shadow-[0_0_10px_rgba(168,85,247,0.2)]' 
+                                        : 'border-[var(--border-light)] bg-[var(--bg-panel)] hover:border-blue-400'"
+                                draggable="true" @click="selectClipboardItem(idx)"
+                                @dragstart="typeof clipboardDragStart === 'function' && clipboardDragStart($event, item, idx)"
+                                @drop.stop="typeof clipboardDropInside === 'function' && clipboardDropInside($event, idx)">
+
+                                <div class="flex justify-between items-center">
+                                    <!-- 标题颜色也跟随状态改变 -->
+                                    <span class="font-bold text-xs truncate"
+                                        :class="(isEditingClipboard && currentClipboardIndex === idx) ? 'text-purple-400' : 'text-blue-400'"
+                                        x-text="item.content.comment || 'Untitled'"></span>
+
+                                    <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <!-- 保持原有的按钮不变 -->
+                                        <button @click.stop="addWiEntryFromClipboard(item.content)"
+                                            class="text-green-500 hover:bg-green-500/10 p-1 rounded"
+                                            title="添加">➕</button>
+                                        <button @click.stop="deleteWiClipboardItem(item.db_id)"
+                                            class="text-red-500 hover:bg-red-500/10 p-1 rounded" title="删除">✕</button>
+                                    </div>
+                                </div>
+
+                                <!-- 增加一个编辑中标记条 -->
+                                <div x-show="isEditingClipboard && currentClipboardIndex === idx"
+                                    class="absolute left-0 top-0 bottom-0 w-1 bg-purple-500 rounded-l"></div>
+
+                                <div class="text-[10px] text-gray-500 truncate font-mono">
+                                    <span
+                                        x-text="typeof formatWiKeys === 'function' ? formatWiKeys(item.content.keys) : item.content.keys"></span>
+                                </div>
+                            </div>
+                        </template>
+
+                        <div x-show="typeof wiClipboardItems !== 'undefined' && wiClipboardItems.length === 0"
+                            class="text-center py-8 text-gray-500 text-xs">
+                            剪切板为空
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="!showRightPanel" class="wi-toggle-btn-float right" @click="showRightPanel = true" title="展开面板">
+                ◀</div>
+
+        </div>
+    </div>
+</div>

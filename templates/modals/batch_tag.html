@@ -1,0 +1,52 @@
+<!-- 批量标签管理 -->
+<div x-data="batchTagModal" x-show="showBatchTagModal" x-cloak class="modal-overlay">
+    <div class="tag-modal-container flex flex-col" style="width: 600px; height: 80vh; max-height: 800px;"
+        @click.away="showBatchTagModal=false">
+        <div
+            style="display:flex; justify-content:space-between; align-items:center; padding-bottom: 1rem; border-bottom: 1px solid var(--border-light); flex-shrink: 0;">
+            <h3 class="text-lg font-bold">批量标签管理</h3>
+            <button @click="showBatchTagModal=false" class="text-gray-400 hover:text-white text-xl">✕</button>
+        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar" style="padding: 1rem 0;">
+            <div style="margin-bottom:1rem;">
+                <label class="text-sm" style="color: var(--text-sub);">添加标签到所有选中卡片</label>
+                <div class="flex gap-2 mt-1">
+                    <input type="text" x-model="batchTagInputAdd" class="form-input" placeholder="输入标签…">
+                    <button @click="batchAddTag(batchTagInputAdd)"
+                        class="bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-white whitespace-nowrap">添加</button>
+                </div>
+            </div>
+            <hr class="my-3" style="border-color: var(--border-light);">
+            <div>
+                <label class="text-sm" style="color: var(--text-sub);">从所有选中卡片删除标签</label>
+                <div class="flex gap-2 mt-1">
+                    <input type="text" x-model="batchTagInputRemove" class="form-input" placeholder="输入标签…">
+                    <button @click="batchRemoveTag(batchTagInputRemove)"
+                        class="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-white whitespace-nowrap">删除</button>
+                </div>
+            </div>
+            <div style="margin-top:1.5rem;">
+                <h4 class="text-sm font-bold text-purple-300 mb-2">从现有标签池选择（多选）</h4>
+                <input type="text" x-model="batchTagPickerSearch" placeholder="搜索标签…" class="form-input mb-2">
+                <div class="tag-cloud-container custom-scrollbar"
+                    style="border:1px solid var(--border-light); padding:0.75rem; background: var(--bg-sub);">
+                    <template x-for="tag in filteredBatchTagPool" :key="tag">
+                        <button @click="toggleBatchSelectTag(tag)" class="tag-chip-btn"
+                            :class="batchSelectedTags.includes(tag) ? 'tag-chip-selected-purple' : 'tag-chip-unselected'">
+                            <span x-text="tag"></span><span x-show="batchSelectedTags.includes(tag)"
+                                style="margin-left:4px;font-size:0.75rem;">✓</span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+        <div style="border-top: 1px solid var(--border-light); padding-top: 1rem; margin-top: auto; flex-shrink: 0;">
+            <div class="flex gap-2 justify-end">
+                <button @click="applyBatchAddTags()"
+                    class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded text-sm">全部添加</button>
+                <button @click="applyBatchRemoveTags()"
+                    class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm">全部删除</button>
+            </div>
+        </div>
+    </div>
+</div>
