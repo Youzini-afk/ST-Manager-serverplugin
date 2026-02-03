@@ -108,6 +108,8 @@ function scanCardsRecursive(dir, baseDir, items, depth = 0) {
                         hasScripts: Boolean(data.extensions?.tavern_helper),
                         version: data.character_version || '',
                         spec: cardData?.spec || 'Unknown',
+                        thumb_url: `/api/thumbnail/${encodeURIComponent(relativePath)}`,
+                        image_url: `/api/thumbnail/${encodeURIComponent(relativePath)}`,
                     });
                 } catch (e) {
                     // 解析失败，跳过
