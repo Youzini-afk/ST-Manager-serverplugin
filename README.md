@@ -1,4 +1,4 @@
-# ST Manager
+# ST-Manager-serverplugin
 
 SillyTavern 资源管理与自动化工具 - 完整集成插件
 
