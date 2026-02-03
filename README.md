@@ -28,7 +28,9 @@ SillyTavern 资源管理与自动化工具 - 完整集成插件
 
 ## 📦 安装
 
-### 1. 启用服务端插件
+### 方式 A：作为 SillyTavern 插件（推荐）
+
+#### 1. 启用服务端插件
 
 编辑 SillyTavern 的 `config.yaml`：
 
@@ -36,18 +38,52 @@ SillyTavern 资源管理与自动化工具 - 完整集成插件
 enableServerPlugins: true
 ```
 
-### 2. 克隆插件仓库
+#### 2. 克隆插件仓库
 
 ```bash
 cd SillyTavern/plugins
 git clone https://github.com/Youzini-afk/ST-Manager-serverplugin.git
 ```
 
-### 3. 重启 SillyTavern
+#### 3. 重启 SillyTavern
 
 **✨ 就这么简单！**
 
 重启后：
+- ✅ 服务端插件自动加载
+- ✅ 前端扩展自动安装到 `public/scripts/extensions/ST-Manager/`
+- ✅ 前端文件已预构建，无需手动 npm build
+
+控制台会显示：
+```
+[ST Manager] ✅ 前端扩展已自动安装/更新 (3 个文件)
+[ST Manager] 请在酒馆 UI 的 Extensions 面板中启用 ST Manager
+```
+
+#### 4. 在酒馆中启用
+
+打开 SillyTavern Web 界面：
+1. 右侧面板 → **Extensions** 标签页
+2. 找到 **"ST Manager"** 
+3. 点击启用即可使用
+
+---
+
+### 方式 B：独立运行（开发/测试）
+
+如果想独立运行而不依赖 SillyTavern：
+
+```bash
+cd ST-Manager-serverplugin
+npm install
+npm start
+```
+
+访问 http://localhost:5000 即可使用 Web UI 和 API。
+
+---
+
+### 🔧 开发者：重新构建前端
 - ✅ 服务端插件自动加载
 - ✅ 前端扩展自动安装到 `public/scripts/extensions/ST-Manager/`
 - ✅ 前端文件已预构建，无需手动 npm build

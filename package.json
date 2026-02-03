@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "ST Manager - SillyTavern 资源管理与自动化工具",
   "main": "server/index.js",
+  "scripts": {
+    "start": "node standalone.js",
+    "dev": "node standalone.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
   "author": "Youzini-afk",
   "license": "MIT",
   "keywords": [
