@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "nunjucks": "^3.2.4"
+    "nunjucks": "^3.2.4",
+    "chokidar": "^3.5.3"
   },
   "author": "Youzini-afk",
   "license": "MIT",

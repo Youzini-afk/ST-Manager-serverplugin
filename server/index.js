@@ -724,11 +724,12 @@ function startWebUIServer() {
         }
         
         // 配置 Nunjucks（兼容 Jinja2 语法）
+        // 生产环境禁用 watch 以避免 chokidar 依赖问题
         nunjucks.configure(templatesDir, {
             autoescape: true,
             express: webApp,
-            watch: true,
-            noCache: true,
+            watch: false,
+            noCache: false,
         });
         
         webApp.set('view engine', 'html');
