@@ -1,0 +1,67 @@
+<!-- 标签筛选大模态框 -->
+<div x-show="showTagFilterModal" x-data="tagFilterModal" x-cloak class="modal-overlay">
+    <div class="tag-modal-container" @click.away="showTagFilterModal=false">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-light); padding-bottom: 1rem;">
+            <div class="flex items-center gap-4">
+                <h3 style="font-size: 1.25rem; font-weight: bold;">
+                    <span x-show="!isDeleteMode">标签库筛选</span>
+                    <span x-show="isDeleteMode" class="text-red-400">永久删除标签</span>
+                </h3>
+                <button @click="toggleDeleteMode()" class="btn-toggle-delete"
+                    :class="isDeleteMode ? 'btn-toggle-mode-delete' : 'btn-toggle-mode-normal'">
+                    <span x-show="!isDeleteMode">🗑️ 切换到删除模式</span>
+                    <span x-show="isDeleteMode">↩ 返回筛选模式</span>
+                </button>
+            </div>
+            <button @click="showTagFilterModal=false"
+                style="color: var(--text-dim); font-size: 1.5rem; background: none; border: none; cursor: pointer;">✕</button>
+        </div>
+        <input type="text" x-model="tagSearchQuery" placeholder="搜索标签..." class="form-input"
+            style="margin-bottom: 1rem; padding: 0.75rem; font-size: 1rem;">
+        <div class="tag-cloud-container custom-scrollbar">
+            <template x-for="tag in filteredTagsPool" :key="tag">
+                <button @click="isDeleteMode ? toggleTagSelectionForDeletion(tag) : toggleFilterTag(tag)"
+                    class="tag-chip-btn flex items-center" :class="{
+                            'tag-chip-selected': !isDeleteMode && filterTags.includes(tag),
+                            'tag-chip-excluded': !isDeleteMode && $store.global.viewState.excludedTags.includes(tag),
+                            'tag-chip-unselected': !isDeleteMode && !filterTags.includes(tag) && !$store.global.viewState.excludedTags.includes(tag),
+                            
+                            'tag-chip-delete-selected': isDeleteMode && selectedTagsForDeletion.includes(tag),
+                            'tag-chip-delete-unselected': isDeleteMode && !selectedTagsForDeletion.includes(tag)
+                        }">
+                    
+                    <span x-show="isDeleteMode && selectedTagsForDeletion.includes(tag)" class="mr-1 font-bold">✓</span>
+                    <span x-text="tag" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                    
+                    <!-- 状态图标 -->
+                    <span x-show="!isDeleteMode && filterTags.includes(tag)"
+                        style="margin-left: 0.4rem; font-size: 0.75rem;">✓</span>
+                    <span x-show="!isDeleteMode && $store.global.viewState.excludedTags.includes(tag)"
+                        style="margin-left: 0.4rem; font-size: 0.75rem;">✕</span>
+                </button>
+            </template>
+            <div x-show="filteredTagsPool.length === 0"
+                style="width: 100%; text-align: center; color: var(--text-dim); margin-top: 2rem;">无匹配标签</div>
+        </div>
+        <div
+            style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-light); padding-top: 1rem;">
+            <div class="flex items-center gap-4">
+                <span class="text-sm" style="color: var(--text-dim);">已选 <span x-text="filterTags.length"
+                        class="text-accent font-bold"></span> 个标签</span>
+                <button @click="deleteFilterTags()" x-show="filterTags.length > 0 && !isDeleteMode"
+                    class="text-xs bg-red-600 hover:bg-red-500 px-2 py-1 rounded text-white">
+                    从当前视图移除选中标签
+                </button>
+            </div>
+            <div class="flex gap-2">
+                <button @click="deleteSelectedTags()" x-show="isDeleteMode && selectedTagsForDeletion.length > 0"
+                    class="text-xs bg-red-700 hover:bg-red-600 px-3 py-1 rounded text-white font-bold shadow-md">
+                    永久删除选中标签
+                </button>
+                <button @click="filterTags=[]"
+                    style="color: #f87171; background: none; border: none; cursor: pointer; font-size: 0.875rem;">清除所有选择</button>
+            </div>
+        </div>
+    </div>
+</div>

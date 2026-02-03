@@ -1,0 +1,282 @@
+<!-- 移动端：悬浮竖排菜单（导入 + 切换） -->
+<div x-show="$store.global.deviceType === 'mobile' && !$store.global.visibleSidebar" class="sidebar-button-group"
+    x-data="sidebar">
+    <!-- 隐藏的文件选择器：多选，仅 json/png -->
+    <input type="file" x-ref="mobileImportInput" class="hidden" multiple accept=".json,.png,application/json,image/png"
+        @change="handleMobileImportChange($event)" />
+    <!-- 导入按钮 -->
+    <button @click="$refs.mobileImportInput.click()" class="sidebar-group-btn sidebar-group-btn-top">
+        <span class="toggle-icon">📥</span>
+    </button>
+    <!-- 打开侧边栏按钮 -->
+    <button @click="$store.global.visibleSidebar = true; document.body.style.overflow = 'hidden';"
+        class="sidebar-group-btn sidebar-group-btn-bottom">
+        <span class="toggle-icon">☰</span>
+    </button>
+</div>
+
+<!-- 移动端：遮罩层 -->
+<div x-show="$store.global.deviceType === 'mobile' && $store.global.visibleSidebar"
+    @click="$store.global.visibleSidebar = false; document.body.style.overflow = '';"
+    x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="sidebar-overlay"></div>
+
+<!-- 侧边栏 -->
+<aside class="sidebar" x-data="sidebar" id="sidebar-root" x-show="visibleSidebar"
+    :class="$store.global.deviceType === 'mobile' ? 'sidebar-mobile' : ''"
+    x-transition:enter="transition ease-out duration-300" x-transition:enter-start="transform -translate-x-full"
+    x-transition:enter-end="transform translate-x-0" x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="transform translate-x-0" x-transition:leave-end="transform -translate-x-full">
+
+    <!-- 移动端：关闭按钮 -->
+    <button x-show="$store.global.deviceType === 'mobile'" @click="toggleSidebarVisible()" class="sidebar-close-btn">
+        <span>✕</span>
+    </button>
+    <div class="flex flex-col border-b border-[var(--border-main)] bg-[var(--bg-sub)] relative z-10 shadow-sm">
+        <!-- 第一类：核心资产 -->
+        <div class="flex">
+            <button @click="switchMode('cards')" class="flex-1 py-3 text-sm font-bold transition-colors border-b-2"
+                :class="currentMode === 'cards' ? 'border-[var(--accent-main)] text-[var(--text-main)] bg-[var(--bg-panel)]' : 'border-transparent text-[var(--text-dim)] hover:text-[var(--text-main)]'">
+                🎴 角色卡
+            </button>
+            <button @click="switchMode('worldinfo')" class="flex-1 py-3 text-sm font-bold transition-colors border-b-2"
+                :class="currentMode === 'worldinfo' ? 'border-[var(--accent-main)] text-[var(--text-main)] bg-[var(--bg-panel)]' : 'border-transparent text-[var(--text-dim)] hover:text-[var(--text-main)]'">
+                🌎 世界书
+            </button>
+        </div>
+
+        <!-- 第二类：扩展工具 (折叠或小字排版) -->
+        <div
+            class="flex bg-[var(--bg-sub)] overflow-x-auto custom-scrollbar no-scrollbar border-t border-[var(--border-light)]">
+            <button @click="switchMode('presets')"
+                class="px-4 py-2 text-xs font-medium whitespace-nowrap transition-colors hover:bg-[var(--bg-hover)]"
+                :class="currentMode === 'presets' ? 'text-[var(--accent-light)] bg-[var(--bg-hover)]' : 'text-[var(--text-dim)]'">
+                📝 预设
+            </button>
+            <button @click="switchMode('regex')"
+                class="px-4 py-2 text-xs font-medium whitespace-nowrap transition-colors hover:bg-[var(--bg-hover)]"
+                :class="currentMode === 'regex' ? 'text-[var(--accent-light)] bg-[var(--bg-hover)]' : 'text-[var(--text-dim)]'">
+                🧩 正则脚本
+            </button>
+            <button @click="switchMode('scripts')"
+                class="px-4 py-2 text-xs font-medium whitespace-nowrap transition-colors hover:bg-[var(--bg-hover)]"
+                :class="currentMode === 'scripts' ? 'text-[var(--accent-light)] bg-[var(--bg-hover)]' : 'text-[var(--text-dim)]'">
+                📜 ST 脚本
+            </button>
+            <button @click="switchMode('quick_replies')"
+                class="px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors hover:bg-[var(--bg-hover)]"
+                :class="currentMode === 'quick_replies' ? 'text-[var(--accent-light)] bg-[var(--bg-hover)]' : 'text-[var(--text-dim)]'">
+                ⚡ 快速回复
+            </button>
+        </div>
+    </div>
+    <!-- === 模式 1: 角色卡侧边栏 (Folder + Tags) === -->
+    <div x-show="currentMode === 'cards' && visibleSidebar" class="flex-1 flex flex-col overflow-hidden">
+        <div
+            style="flex: 1; display: flex; flex-direction: column; overflow: hidden; border-bottom: 1px solid var(--border-main);">
+            <div class="sidebar-section-header">
+                <span class="font-bold text-xs uppercase" style="color: var(--text-dim);">资源文件夹</span>
+                <button @click="$store.global.folderModals.createRoot.visible = true"
+                    class="text-xs text-accent cursor-pointer hover:underline">+ 新建</button>
+            </div>
+            <div class="sidebar-content custom-scrollbar p-2">
+                <div @click="setCategory('')" @dragover.prevent="handleDragOverRoot($event)"
+                    @dragleave="handleDragLeaveRoot($event)" @drop.prevent="handleDropOnRoot($event)"
+                    @contextmenu.prevent="showFolderContextMenu($event, {path: '', name: '根目录'})"
+                    :class="[filterCategory==='' ? 'active' : '', dragOverCat==='根目录' ? 'drag-over' : '']"
+                    class="folder-item flex items-center px-3 py-2 rounded-lg cursor-pointer text-sm mb-1">
+                    <span class="mr-2">📂</span>
+                    <span style="flex: 1;">全部卡片</span>
+                    <span class="text-xs opacity-60" x-text="libraryTotal"></span>
+                    <!-- 移动端：三个点操作按钮 -->
+                    <button x-show="$store.global.deviceType === 'mobile'"
+                        @click.stop="showFolderContextMenuFromButton($event, {path: '', name: '根目录'})"
+                        class="ml-2 w-6 h-6 flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
+                        style="background:none; border:none; color:inherit; cursor:pointer; flex-shrink: 0;">
+                        <span style="font-size: 14px; font-weight: bold;">⋯</span>
+                    </button>
+                </div>
+                <template x-for="folder in folderTree" :key="folder.path">
+                    <div x-show="folder.visible">
+                        <div @click="setCategory(folder.path)"
+                            @contextmenu.prevent="showFolderContextMenu($event, folder)"
+                            @dragover.prevent="folderDragOver($event, folder)"
+                            @dragleave="folderDragLeave($event, folder)" @drop.prevent="folderDrop($event, folder)"
+                            draggable="true" @dragstart="folderDragStart($event, folder)"
+                            @dragend="draggedFolder = null; dragOverFolder = null"
+                            :class="['pl-level-' + Math.min(folder.level, 3), filterCategory === folder.path ? 'active' : '', dragOverFolder === folder.path ? 'drag-over' : '']"
+                            class="folder-item flex items-center py-1.5 pr-2 rounded-lg cursor-pointer text-sm mb-0.5 group">
+                            <button @click.stop="toggleFolder(folder.path)"
+                                class="w-6 h-6 flex items-center justify-center opacity-70 hover:opacity-100"
+                                style="background:none; border:none; color:inherit; cursor:pointer;">
+                                <span x-text="folder.expanded ? '▼' : '▶'" style="font-size: 10px;"></span>
+                            </button>
+                            <span class="mr-2 text-yellow-500 opacity-80 group-hover:opacity-100">📁</span>
+                            <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                                x-text="folder.name"></span>
+                            <span class="text-xs opacity-50 ml-2" x-text="getCategoryCount(folder.path)"></span>
+                            <!-- 移动端：三个点操作按钮 -->
+                            <button x-show="$store.global.deviceType === 'mobile'"
+                                @click.stop="showFolderContextMenuFromButton($event, folder)"
+                                class="ml-2 w-6 h-6 flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
+                                style="background:none; border:none; color:inherit; cursor:pointer; flex-shrink: 0;">
+                                <span style="font-size: 14px; font-weight: bold;">⋯</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+        <div style="display: flex; flex-direction: column; overflow: hidden;"
+            :style="tagsSectionExpanded ? 'flex: 1;' : ''">
+            <div class="sidebar-section-header">
+                <div class="flex items-center gap-2" @click="tagsSectionExpanded = !tagsSectionExpanded">
+                    <button
+                        class="w-5 h-5 flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity"
+                        style="background:none; border:none; color:inherit; cursor:pointer; flex-shrink: 0;">
+                        <span x-text="tagsSectionExpanded ? '▼' : '▶'" style="font-size: 10px;"></span>
+                    </button>
+                    <span class="font-bold text-xs uppercase" style="color: var(--text-dim);">标签索引</span>
+                </div>
+                <button @click="openTagFilter()" class="text-xs text-accent cursor-pointer hover:underline"
+                    title="查看全部">📚 完整库</button>
+            </div>
+            <div x-show="tagsSectionExpanded" class="sidebar-content custom-scrollbar" x-transition>
+                <div class="sidebar-tag-cloud">
+                    <template x-for="tag in allTagsPool.slice(0, 30)" :key="tag">
+                        <button @click="toggleFilterTag(tag)" class="sidebar-tag-chip" :class="{
+                                'active': filterTags.includes(tag),
+                                'excluded': $store.global.viewState.excludedTags.includes(tag)
+                            }">
+                            <span x-text="tag"></span>
+                        </button>
+                    </template>
+                    <button x-show="allTagsPool.length > 30" @click="showTagFilterModal=true" class="sidebar-tag-chip"
+                        style="border-style: dashed; opacity: 0.7;">
+                        + <span x-text="allTagsPool.length - 30"></span> 更多...
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- === 模式 2: 世界书侧边栏 (Type Filters) === -->
+    <div x-show="currentMode === 'worldinfo' && visibleSidebar"
+        class="flex-1 flex flex-col overflow-hidden bg-[var(--bg-panel)]">
+        <div class="p-4 space-y-2">
+            <div class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider mb-2">来源筛选</div>
+
+            <button @click="setWiFilter('all')"
+                class="w-full text-left px-3 py-2 rounded text-sm flex justify-between items-center transition-colors"
+                :class="wiFilterType === 'all' ? 'bg-[var(--accent-main)] text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'">
+                <span>📚 全部显示</span>
+            </button>
+
+            <button @click="setWiFilter('global')"
+                class="w-full text-left px-3 py-2 rounded text-sm flex justify-between items-center transition-colors"
+                :class="wiFilterType === 'global' ? 'bg-blue-600 text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'">
+                <span>🌐 全局目录</span>
+                <span class="text-xs opacity-60">lorebooks/</span>
+            </button>
+
+            <button @click="setWiFilter('resource')"
+                class="w-full text-left px-3 py-2 rounded text-sm flex justify-between items-center transition-colors"
+                :class="wiFilterType === 'resource' ? 'bg-green-600 text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'">
+                <span>📁 资源目录</span>
+                <span class="text-xs opacity-60">res/.../lorebooks</span>
+            </button>
+
+            <button @click="setWiFilter('embedded')"
+                class="w-full text-left px-3 py-2 rounded text-sm flex justify-between items-center transition-colors"
+                :class="wiFilterType === 'embedded' ? 'bg-purple-600 text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'">
+                <span>🎴 角色内嵌</span>
+                <span class="text-xs opacity-60">Embedded</span>
+            </button>
+        </div>
+
+        <div class="mt-auto p-4 border-t border-[var(--border-main)]">
+            <button @click="migrateLorebooks()"
+                class="w-full py-2 text-xs border border-dashed border-[var(--text-dim)] text-[var(--text-dim)] hover:border-[var(--accent-main)] hover:text-[var(--accent-main)] rounded transition-colors text-center">
+                🧹 整理资源目录文件
+            </button>
+        </div>
+    </div>
+
+    <!-- === 模式 3: 预设侧边栏 === -->
+    <div x-show="currentMode === 'presets' && visibleSidebar"
+        class="flex-1 flex flex-col overflow-hidden bg-[var(--bg-panel)]" x-data>
+        <div class="p-4 space-y-2">
+            <!-- 来源筛选标题 -->
+            <div class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider mb-2">来源筛选</div>
+
+            <!-- 全部显示 -->
+            <button @click="$store.global.presetFilterType='all'"
+                class="w-full text-left px-3 py-2 rounded text-sm flex justify-between items-center transition-colors"
+                :class="$store.global.presetFilterType === 'all' ? 'bg-[var(--accent-main)] text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'">
+                <span>📚 全部显示</span>
+            </button>
+
+            <!-- 全局目录 -->
+            <button @click="$store.global.presetFilterType='global'"
+                class="w-full text-left px-3 py-2 rounded text-sm flex justify-between items-center transition-colors"
+                :class="$store.global.presetFilterType === 'global' ? 'bg-blue-600 text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'">
+                <span>🌐 全局目录</span>
+                <span class="text-xs opacity-60">presets/</span>
+            </button>
+
+            <!-- 资源绑定 -->
+            <button @click="$store.global.presetFilterType='resource'"
+                class="w-full text-left px-3 py-2 rounded text-sm flex justify-between items-center transition-colors"
+                :class="$store.global.presetFilterType === 'resource' ? 'bg-green-600 text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'">
+                <span>📁 资源绑定</span>
+                <span class="text-xs opacity-60">res/.../presets</span>
+            </button>
+        </div>
+
+        <div class="mt-auto p-4 border-t border-[var(--border-main)] text-xs text-[var(--text-dim)]">
+            提示: 拖拽 .json 预设文件到右侧网格区域即可上传到全局目录。
+        </div>
+    </div>
+
+    <!-- === 模式 4: 扩展脚本侧边栏 (Regex & Scripts & Quick Replies) === -->
+    <div x-show="['regex', 'scripts', 'quick_replies'].includes(currentMode) && visibleSidebar"
+        class="flex-1 flex flex-col overflow-hidden bg-[var(--bg-panel)]" x-data>
+        <div class="p-4 space-y-2">
+            <!-- 来源筛选标题 -->
+            <div class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider mb-2">来源筛选</div>
+
+            <!-- 全部显示 -->
+            <button @click="$store.global.extensionFilterType='all'"
+                class="w-full text-left px-3 py-2 rounded text-sm flex justify-between items-center transition-colors"
+                :class="$store.global.extensionFilterType === 'all' ? 'bg-[var(--accent-main)] text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'">
+                <span>📚 全部显示</span>
+            </button>
+
+            <!-- 全局目录 -->
+            <button @click="$store.global.extensionFilterType='global'"
+                class="w-full text-left px-3 py-2 rounded text-sm flex justify-between items-center transition-colors"
+                :class="$store.global.extensionFilterType === 'global' ? 'bg-blue-600 text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'">
+                <span>🌐 全局目录</span>
+                <!-- 动态显示目录名 -->
+                <span class="text-xs opacity-60"
+                    x-text="{
+                        'regex': 'extensions/regex',
+                        'scripts': 'extensions/tavern_helper',
+                        'quick_replies': 'extensions/quick-replies'
+                    }[currentMode]"></span>
+            </button>
+
+            <!-- 资源绑定 -->
+            <button @click="$store.global.extensionFilterType='resource'"
+                class="w-full text-left px-3 py-2 rounded text-sm flex justify-between items-center transition-colors"
+                :class="$store.global.extensionFilterType === 'resource' ? 'bg-green-600 text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'">
+                <span>📁 资源绑定</span>
+                <span class="text-xs opacity-60">res/.../extensions</span>
+            </button>
+        </div>
+
+        <div class="mt-auto p-4 border-t border-[var(--border-main)] text-xs text-[var(--text-dim)]">
+            提示: 拖拽 .json 文件到右侧网格区域即可上传到全局目录。
+        </div>
+    </div>
+</aside>

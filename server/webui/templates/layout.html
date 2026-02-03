@@ -1,0 +1,37 @@
+<!-- templates/layout.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <title>ST Manager Pro V86</title>
+    
+    <!-- 核心样式 -->
+    <link rel="stylesheet" href="/static/css/style.css">
+
+    <script type="module" src="/static/js/app.js"></script>
+    <!-- 第三方库 (Phase 1 归档位置) -->
+    <script src="/static/lib/tailwindcss.js"></script>
+    <script src="/static/lib/alpine-collapse.js"></script>
+    <script src="/static/lib/alpine.js" defer></script>
+    <script src="/static/lib/marked.min.js"></script>
+    <script src="/static/lib/diff.min.js"></script>
+</head>
+
+<!-- 全局状态绑定 -->
+<body x-data="layout" x-effect="document.documentElement.classList.toggle('light-mode', !isDarkMode)">
+    
+    <!-- 1. 全局 Loading 遮罩 -->
+    {% include "components/loading.html" %}
+
+    <!-- 2. 主内容插槽 -->
+    {% block content %}{% endblock %}
+
+    <!-- 3. 全局 Toast 通知 -->
+    <div class="toast-notification" :class="{'show': showToastState}" x-text="toastMessage"></div>
+</body>
+
+</html>

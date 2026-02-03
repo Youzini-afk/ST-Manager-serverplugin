@@ -1,0 +1,117 @@
+<!-- 回滚/时光机模态框 -->
+<div x-show="showRollbackModal" x-data="rollbackModal" x-cloak class="modal-overlay z-modal-popover" @click.self="showRollbackModal=false">
+    <div class="rollback-modal-container">
+
+        <!-- 1. Header -->
+        <div class="rb-header">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">⏪</span>
+                <div>
+                    <h3 class="font-bold text-lg">时光机 (Time Machine)</h3>
+                    <p class="text-xs text-[var(--text-dim)]">选择两个版本进行比对，或恢复历史版本</p>
+                </div>
+            </div>
+            <button @click="showRollbackModal=false" class="text-gray-400 hover:text-white px-2 py-1 text-xl">✕</button>
+        </div>
+
+        <!-- 2. Body Grid -->
+        <div class="rb-body">
+
+            <!-- Left: Version List -->
+            <div class="rb-sidebar custom-scrollbar">
+                <div class="rb-sidebar-header">
+                    <div class="w-8 text-center text-red-400 font-bold" title="Diff 左侧 (旧)">L</div>
+                    <div class="w-8 text-center text-green-400 font-bold" title="Diff 右侧 (新)">R</div>
+                    <div class="flex-1 text-xs font-bold uppercase text-[var(--text-dim)]">版本时间 / 备注</div>
+                </div>
+
+                <template x-for="ver in rollbackVersions" :key="ver.path || 'current'">
+                    <div class="rb-item"
+                        :class="{'bg-[var(--bg-hover)]': diffSelection.left === ver || diffSelection.right === ver}">
+
+                        <!-- Radio: Left Selection -->
+                        <div class="w-8 flex justify-center" @click.stop>
+                            <input type="radio" name="diff-left" :checked="diffSelection.left === ver"
+                                @change="setDiffSide('left', ver)" class="cursor-pointer accent-red-500">
+                        </div>
+
+                        <!-- Radio: Right Selection -->
+                        <div class="w-8 flex justify-center" @click.stop>
+                            <input type="radio" name="diff-right" :checked="diffSelection.right === ver"
+                                @change="setDiffSide('right', ver)" class="cursor-pointer accent-green-500">
+                        </div>
+
+                        <!-- Info -->
+                        <div class="flex-1 min-w-0 py-2 cursor-pointer" @click="setDiffSide('left', ver)">
+                            <div class="flex items-center flex-wrap gap-2">
+                                <span class="text-sm font-mono"
+                                    x-text="ver.is_current ? '当前版本 (Current)' : new Date(ver.mtime * 1000).toLocaleString()"></span>
+
+                                <!-- AUTO 徽章：使用紫色背景 -->
+                                <span x-show="ver.is_auto"
+                                    class="text-[10px] bg-purple-600 text-white px-1.5 py-0.5 rounded font-bold border border-purple-400 shadow-sm"
+                                    title="自动保存的快照">AUTO</span>
+
+                                <!-- KEY 徽章：使用琥珀色背景 -->
+                                <span x-show="ver.is_key"
+                                    class="text-[10px] bg-amber-500 text-black px-1.5 py-0.5 rounded font-bold border border-amber-400"
+                                    x-text="ver.label"></span>
+
+                                <!-- LIVE 徽章 -->
+                                <span x-show="ver.is_current"
+                                    class="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded border border-blue-400">LIVE</span>
+                            </div>
+                            <div class="text-[10px] text-[var(--text-dim)] mt-0.5" x-show="!ver.is_current">
+                                Size: <span x-text="(ver.size/1024).toFixed(1)"></span> KB
+                            </div>
+                        </div>
+
+                        <!-- Action: Restore -->
+                        <button x-show="!ver.is_current"
+                            @click.stop="selectedBackup=ver; diffSelection.left=ver; performRestore()"
+                            class="px-2 py-1 text-xs border border-[var(--border-light)] rounded hover:bg-red-900/30 text-[var(--text-sub)] hover:text-red-400 transition ml-2">
+                            ⏪ 恢复
+                        </button>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Right: Diff Viewer -->
+            <div class="rb-diff-area relative">
+                <div class="diff-header">
+                    <div class="diff-header-item text-red-400 flex items-center justify-center gap-2">
+                        <span>🛑 Left (Old)</span>
+                        <span class="text-xs text-[var(--text-dim)]"
+                            x-text="diffSelection.left ? (diffSelection.left.is_current ? 'Current' : new Date(diffSelection.left.mtime*1000).toLocaleString()) : '-'"></span>
+                    </div>
+                    <div class="diff-header-item text-green-400 flex items-center justify-center gap-2">
+                        <span>🟢 Right (New)</span>
+                        <span class="text-xs text-[var(--text-dim)]"
+                            x-text="diffSelection.right ? (diffSelection.right.is_current ? 'Current' : new Date(diffSelection.right.mtime*1000).toLocaleString()) : '-'"></span>
+                    </div>
+                </div>
+
+                <div class="diff-container" id="diff-scroll-container">
+                    <div class="diff-pane custom-scrollbar" id="diff-left"
+                        @scroll="document.getElementById('diff-right').scrollTop = $el.scrollTop">
+                        <div x-html="diffData.left"></div>
+                    </div>
+                    <div class="diff-pane custom-scrollbar" id="diff-right"
+                        @scroll="document.getElementById('diff-left').scrollTop = $el.scrollTop">
+                        <div x-html="diffData.right"></div>
+                    </div>
+                </div>
+
+                <!-- Loading 遮罩 -->
+                <div x-show="isDiffLoading" x-transition.opacity.duration.200ms
+                    class="absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm bg-black/10 dark:bg-white/5">
+                    <div
+                        class="bg-[var(--bg-panel)] border border-[var(--border-light)] px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+                        <span class="animate-spin text-xl">⏳</span>
+                        <span class="text-sm font-bold">正在比对差异...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

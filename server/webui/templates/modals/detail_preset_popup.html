@@ -1,0 +1,354 @@
+<!-- 预设详情阅览界面 (Preset Detail Reader Modal) -->
+<div x-show="showModal" x-cloak class="modal-overlay z-modal-std flex items-center justify-center p-4"
+    @click.self="closeModal()"
+    x-data="presetDetailReader()">
+
+    <!-- 定义内部 Tab 状态 -->
+    <div class="preset-reader-modal bg-[var(--bg-panel)] border border-[var(--border-light)] rounded-xl shadow-2xl
+              flex flex-col w-full max-w-7xl h-[90vh] overflow-hidden relative animate-scale-in"
+        >
+
+        <!-- 1. 顶部工具栏 -->
+        <div
+            class="preset-reader-topbar border-b border-[var(--border-light)] flex items-center gap-3 px-4 py-3 bg-[var(--bg-sub)] flex-shrink-0">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+                <div
+                    class="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-white/5 flex-shrink-0">
+                    <span class="text-xl">🎛️</span>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center flex-wrap gap-x-2 gap-y-1">
+                        <h3 class="text-base md:text-lg font-bold leading-tight truncate text-[var(--text-main)] max-w-[300px]"
+                            x-text="activePresetDetail?.name || '未命名预设'"></h3>
+                        <span
+                            class="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase border border-white/5"
+                            :class="activePresetDetail?.type === 'global' ? 'bg-blue-600/30 text-blue-200' : 'bg-green-600/30 text-green-200'"
+                            x-text="activePresetDetail?.type === 'global' ? 'GLOBAL' : 'RES'"></span>
+                    </div>
+                    <div class="text-[10px] text-[var(--text-dim)] font-mono flex items-center gap-2 mt-0.5">
+                        <span x-text="activePresetDetail?.path"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作按钮组 -->
+            <div class="flex items-center gap-2">
+                <button @click="editRaw()"
+                    class="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5" title="编辑源文件">
+                    <span>✏️</span> <span class="hidden sm:inline">JSON</span>
+                </button>
+                <button @click="closeModal()"
+                    class="text-[var(--text-dim)] hover:text-red-400 p-2 rounded-full hover:bg-[var(--bg-body)] transition-colors">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. 主体区域 -->
+        <div class="flex-1 flex overflow-hidden min-h-0">
+
+            <!-- 左侧：多标签参数面板 -->
+            <aside
+                class="w-[320px] flex-shrink-0 bg-[var(--bg-sub)] border-r border-[var(--border-main)] flex flex-col hidden md:flex">
+
+                <!-- Tab 切换 -->
+                <div class="flex border-b border-[var(--border-light)] px-2 pt-2 gap-1 bg-[var(--bg-panel)]">
+                    <button @click="sidebarTab = 'samplers'"
+                        class="flex-1 py-2 text-xs font-bold border-t border-l border-r rounded-t-lg transition-colors relative top-[1px]"
+                        :class="sidebarTab === 'samplers' ? 'bg-[var(--bg-sub)] border-[var(--border-main)] border-b-[var(--bg-sub)] text-[var(--text-main)]' : 'bg-transparent border-transparent text-[var(--text-dim)] hover:text-[var(--text-main)]'">
+                        Samplers
+                    </button>
+                    <button @click="sidebarTab = 'config'"
+                        class="flex-1 py-2 text-xs font-bold border-t border-l border-r rounded-t-lg transition-colors relative top-[1px]"
+                        :class="sidebarTab === 'config' ? 'bg-[var(--bg-sub)] border-[var(--border-main)] border-b-[var(--bg-sub)] text-[var(--text-main)]' : 'bg-transparent border-transparent text-[var(--text-dim)] hover:text-[var(--text-main)]'">
+                        Config
+                    </button>
+                    <button @click="sidebarTab = 'templates'"
+                        class="flex-1 py-2 text-xs font-bold border-t border-l border-r rounded-t-lg transition-colors relative top-[1px]"
+                        :class="sidebarTab === 'templates' ? 'bg-[var(--bg-sub)] border-[var(--border-main)] border-b-[var(--bg-sub)] text-[var(--text-main)]' : 'bg-transparent border-transparent text-[var(--text-dim)] hover:text-[var(--text-main)]'">
+                        Templates
+                    </button>
+                </div>
+
+                <!-- Tab 内容容器 -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
+
+                    <!-- TAB 1: 采样参数 (Samplers) -->
+                    <div x-show="sidebarTab === 'samplers'" class="space-y-4 animate-fade-in">
+                        <!-- 主要参数 -->
+                        <div class="space-y-3">
+                            <div class="text-[10px] uppercase font-bold text-[var(--text-dim)] tracking-wider">Core
+                                Samplers</div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="p-2 bg-[var(--bg-body)] rounded border border-[var(--border-light)]">
+                                    <div class="text-[9px] text-[var(--text-dim)] uppercase">Temp</div>
+                                    <div class="font-mono font-bold text-orange-400"
+                                        x-text="formatParam(activePresetDetail?.samplers?.temperature)"></div>
+                                </div>
+                                <div class="p-2 bg-[var(--bg-body)] rounded border border-[var(--border-light)]">
+                                    <div class="text-[9px] text-[var(--text-dim)] uppercase">Max Tokens</div>
+                                    <div class="font-mono font-bold text-blue-400"
+                                        x-text="formatParam(activePresetDetail?.samplers?.max_tokens)"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 进阶采样 -->
+                        <div class="space-y-2">
+                            <div
+                                class="text-[10px] uppercase font-bold text-[var(--text-dim)] tracking-wider border-t border-[var(--border-light)] pt-2">
+                                Probabilities</div>
+
+                            <template x-for="p in [
+                                {l:'Top P', v: activePresetDetail?.samplers?.top_p, c:'text-green-400'},
+                                {l:'Min P', v: activePresetDetail?.samplers?.min_p, c:'text-green-400'},
+                                {l:'Top K', v: activePresetDetail?.samplers?.top_k, c:'text-purple-400'},
+                                {l:'Top A', v: activePresetDetail?.samplers?.top_a, c:'text-purple-400'},
+                                {l:'Typical', v: activePresetDetail?.samplers?.typical_p, c:'text-cyan-400'},
+                                {l:'TFS', v: activePresetDetail?.samplers?.tail_free_sampling, c:'text-cyan-400'}
+                            ]">
+                                <div class="flex justify-between items-center text-xs"
+                                    x-show="p.v !== undefined && p.v !== null">
+                                    <span class="text-[var(--text-dim)]" x-text="p.l"></span>
+                                    <span class="font-mono font-bold" :class="p.c" x-text="formatParam(p.v)"></span>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- 惩罚参数 -->
+                        <div class="space-y-2">
+                            <div
+                                class="text-[10px] uppercase font-bold text-[var(--text-dim)] tracking-wider border-t border-[var(--border-light)] pt-2">
+                                Penalties</div>
+
+                            <template x-for="p in [
+                                {l:'Repetition Pen', v: activePresetDetail?.samplers?.repetition_penalty, c:'text-red-400'},
+                                {l:'Rep Pen Range', v: activePresetDetail?.samplers?.repetition_penalty_range, c:'text-red-300'},
+                                {l:'Freq Penalty', v: activePresetDetail?.samplers?.frequency_penalty, c:'text-yellow-400'},
+                                {l:'Pres Penalty', v: activePresetDetail?.samplers?.presence_penalty, c:'text-pink-400'}
+                            ]">
+                                <div class="flex justify-between items-center text-xs"
+                                    x-show="p.v !== undefined && p.v !== null">
+                                    <span class="text-[var(--text-dim)]" x-text="p.l"></span>
+                                    <span class="font-mono font-bold" :class="p.c" x-text="formatParam(p.v)"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: 配置 (Config) -->
+                    <div x-show="sidebarTab === 'config'" class="space-y-4 animate-fade-in">
+                        <div class="space-y-3">
+                            <div class="text-[10px] uppercase font-bold text-[var(--text-dim)] tracking-wider">Context &
+                                Output</div>
+
+                            <div class="p-3 bg-[var(--bg-body)] rounded border border-[var(--border-light)] space-y-2">
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-[var(--text-dim)]">Context Limit</span>
+                                    <span class="font-mono font-bold text-[var(--text-main)]"
+                                        x-text="activePresetDetail?.config?.context_length || 'Auto'"></span>
+                                </div>
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-[var(--text-dim)]">Streaming</span>
+                                    <span class="font-bold"
+                                        :class="activePresetDetail?.config?.streaming ? 'text-green-400' : 'text-gray-500'"
+                                        x-text="activePresetDetail?.config?.streaming ? 'ON' : 'OFF'"></span>
+                                </div>
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-[var(--text-dim)]">Wrap Quotes</span>
+                                    <span class="font-bold"
+                                        :class="activePresetDetail?.config?.wrap_in_quotes ? 'text-green-400' : 'text-gray-500'"
+                                        x-text="activePresetDetail?.config?.wrap_in_quotes ? 'ON' : 'OFF'"></span>
+                                </div>
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-[var(--text-dim)]">Show Thoughts</span>
+                                    <span class="font-bold"
+                                        :class="activePresetDetail?.config?.show_thoughts ? 'text-green-400' : 'text-gray-500'"
+                                        x-text="activePresetDetail?.config?.show_thoughts ? 'ON' : 'OFF'"></span>
+                                </div>
+                            </div>
+
+                            <div class="p-3 bg-[var(--bg-body)] rounded border border-[var(--border-light)] space-y-1">
+                                <div class="text-[9px] text-[var(--text-dim)] uppercase mb-1">Bias Preset</div>
+                                <div class="text-xs font-bold text-[var(--text-main)] truncate"
+                                    x-text="activePresetDetail?.formatting?.bias_preset || 'None'"></div>
+                            </div>
+                        </div>
+
+                        <!-- 扩展显示 -->
+                        <div x-show="(activePresetDetail?.regex_count || 0) + (activePresetDetail?.script_count || 0) > 0"
+                            class="pt-4 border-t border-[var(--border-light)]">
+                            <div class="text-[10px] uppercase font-bold text-[var(--text-dim)] tracking-wider mb-2">
+                                Attached Scripts</div>
+                            <button @click="openAdvancedExtensions()"
+                                class="w-full btn-secondary py-2 text-xs flex justify-between items-center px-3">
+                                <span>Advanced Scripts</span>
+                                <span class="bg-purple-500 text-white text-[10px] px-1.5 rounded-full"
+                                    x-text="(activePresetDetail?.regex_count || 0) + (activePresetDetail?.script_count || 0)"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: 模板 (Templates) -->
+                    <div x-show="sidebarTab === 'templates'" class="space-y-4 animate-fade-in">
+                        <div class="text-[10px] uppercase font-bold text-[var(--text-dim)] tracking-wider">Formatting
+                            Strings</div>
+
+                        <!-- 循环显示各种模板字符串 -->
+                        <div class="space-y-3">
+                            <template x-for="tpl in [
+                                {k:'wi_format', l:'World Info Format'},
+                                {k:'scenario_format', l:'Scenario Format'},
+                                {k:'personality_format', l:'Personality Format'},
+                                {k:'assistant_prefill', l:'Assistant Prefill'},
+                                {k:'new_chat_prompt', l:'New Chat Prompt'},
+                                {k:'impersonation_prompt', l:'Impersonation'}
+                            ]">
+                                <div x-show="activePresetDetail?.formatting?.[tpl.k]" class="group">
+                                    <div class="text-[9px] text-[var(--text-dim)] mb-1" x-text="tpl.l"></div>
+                                    <div class="bg-[var(--bg-body)] p-2 rounded border border-[var(--border-light)] text-[10px] font-mono text-[var(--text-sub)] break-all max-h-20 overflow-y-auto custom-scrollbar select-text"
+                                        x-text="activePresetDetail?.formatting?.[tpl.k]"></div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div x-show="!activePresetDetail?.formatting?.wi_format"
+                            class="text-xs text-[var(--text-dim)] italic text-center py-4">
+                            此预设未定义特殊的格式化模板
+                        </div>
+                    </div>
+
+                    <div class="p-3 border-t border-[var(--border-light)] bg-[var(--bg-panel)] flex-shrink-0"
+                        x-show="(activePresetDetail?.regex_count || 0) + (activePresetDetail?.script_count || 0) > 0">
+                        <button @click="openAdvancedExtensions()"
+                            class="w-full btn-secondary py-2.5 text-xs flex justify-between items-center px-4 hover:bg-purple-600 hover:text-white group transition-all">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base group-hover:scale-110 transition-transform">🧩</span>
+                                <span class="font-bold">Advanced Scripts</span>
+                            </div>
+                            <div class="flex gap-1">
+                                <span x-show="(activePresetDetail?.regex_count || 0) > 0"
+                                    class="bg-green-500/20 text-green-300 border border-green-500/30 text-[9px] px-1.5 py-0.5 rounded font-mono"
+                                    title="Regex Scripts">R:<span
+                                        x-text="activePresetDetail?.regex_count"></span></span>
+                                <span x-show="(activePresetDetail?.script_count || 0) > 0"
+                                    class="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[9px] px-1.5 py-0.5 rounded font-mono"
+                                    title="Tavern Scripts">S:<span
+                                        x-text="activePresetDetail?.script_count"></span></span>
+                            </div>
+                        </button>
+                    </div>
+
+                </div>
+            </aside>
+
+            <!-- 中间：Prompt 列表阅读器 -->
+            <main class="flex-1 flex flex-col min-w-0 bg-[var(--bg-body)] relative">
+
+                <!-- 列表头 -->
+                <div
+                    class="h-10 border-b border-[var(--border-light)] flex items-center justify-between px-4 bg-[var(--bg-body)]/80 backdrop-blur z-10 sticky top-0">
+                    <div
+                        class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider flex items-center gap-2">
+                        <span>Prompt Context Sequence</span>
+                        <span class="bg-[var(--accent-main)]/10 text-[var(--accent-main)] px-1.5 rounded text-[10px]"
+                            x-text="activePresetDetail?.prompts?.length || 0"></span>
+                    </div>
+                </div>
+
+                <!-- 列表内容 -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+                    <template x-for="(prompt, idx) in normalizePrompts(activePresetDetail?.prompts || [])"
+                        :key="prompt.key">
+
+                        <!-- 动态渲染：根据是否是 Marker (特殊占位符) 区分显示 -->
+                        <div :id="'preset-prompt-' + prompt.key" class="transition-all duration-200">
+
+                            <!-- CASE A: Marker / System Placeholder (只读开关) -->
+                            <!-- 判断逻辑: prompt.marker 为 true，或 identifier 在特定列表 -->
+                            <template
+                                x-if="prompt.meta.some(m => m.includes('marker: true')) || ['worldInfoBefore','worldInfoAfter','charDescription','charPersonality','scenario','chatHistory','dialogueExamples','personaDescription'].includes(prompt.key)">
+                                <div
+                                    class="flex items-center gap-3 p-3 rounded-lg border border-[var(--border-light)] bg-[var(--bg-panel)] opacity-80 hover:opacity-100 transition-opacity">
+                                    <!-- Icon -->
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center bg-[var(--bg-body)] text-lg select-none"
+                                        :class="prompt.enabled ? 'grayscale-0' : 'grayscale opacity-50'">
+                                        <span x-text="getPromptIcon(prompt.key)"></span>
+                                    </div>
+
+                                    <!-- Title -->
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-sm font-bold text-[var(--text-main)] truncate"
+                                                :class="!prompt.enabled && 'line-through opacity-50'"
+                                                x-text="prompt.name"></span>
+                                            <span
+                                                class="text-[9px] px-1.5 border border-[var(--border-light)] rounded text-[var(--text-dim)] uppercase">Marker</span>
+                                        </div>
+                                        <div class="text-[10px] text-[var(--text-dim)] truncate mt-0.5">
+                                            系统自动注入的内容位置占位符
+                                        </div>
+                                    </div>
+
+                                    <!-- Switch Visual (Read Only) -->
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] font-bold uppercase"
+                                            :class="prompt.enabled ? 'text-green-500' : 'text-gray-500'"
+                                            x-text="prompt.enabled ? 'ON' : 'OFF'"></span>
+                                        <div class="w-8 h-4 rounded-full relative transition-colors"
+                                            :class="prompt.enabled ? 'bg-green-500/20' : 'bg-gray-600/20'">
+                                            <div class="absolute top-0.5 w-3 h-3 rounded-full shadow-sm transition-all"
+                                                :class="prompt.enabled ? 'right-0.5 bg-green-500' : 'left-0.5 bg-gray-400'">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- CASE B: Text Prompt (显示具体内容) -->
+                            <template
+                                x-if="!(prompt.meta.some(m => m.includes('marker: true')) || ['worldInfoBefore','worldInfoAfter','charDescription','charPersonality','scenario','chatHistory','dialogueExamples','personaDescription'].includes(prompt.key))">
+                                <div
+                                    class="rounded-lg border border-[var(--border-light)] bg-[var(--bg-panel)] overflow-hidden group">
+                                    <!-- Header -->
+                                    <div
+                                        class="flex items-center justify-between px-3 py-2 bg-[var(--bg-sub)] border-b border-[var(--border-light)]">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-lg">📝</span>
+                                            <span class="text-sm font-bold text-[var(--text-main)]"
+                                                x-text="prompt.name || 'Prompt ' + (idx+1)"></span>
+                                            <span
+                                                class="text-[10px] px-1.5 rounded bg-[var(--bg-body)] text-[var(--text-dim)] border border-[var(--border-light)]"
+                                                x-text="getPromptRole(prompt)"></span>
+                                        </div>
+                                        <!-- Enabled Status -->
+                                        <div class="flex items-center gap-1.5" :title="prompt.enabled ? '已启用' : '已禁用'">
+                                            <div class="w-2 h-2 rounded-full"
+                                                :class="prompt.enabled ? 'bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'bg-red-500'">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Content -->
+                                    <div class="p-3">
+                                        <div class="text-xs font-mono text-[var(--text-sub)] whitespace-pre-wrap break-words leading-relaxed select-text opacity-90"
+                                            x-text="prompt.content"></div>
+                                        <div x-show="!prompt.content" class="text-xs text-[var(--text-dim)] italic">
+                                            (无内容)
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                        </div>
+                    </template>
+                </div>
+            </main>
+
+        </div>
+    </div>
+</div>
