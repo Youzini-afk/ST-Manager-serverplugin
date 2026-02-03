@@ -974,7 +974,10 @@ function registerRoutes(app, staticDir) {
             const resourceDirMap = {
                 'characters': { src: 'characters', dest: 'library/characters', exts: ['.png', '.json'] },
                 'worlds': { src: 'worlds', dest: 'library/lorebooks', exts: ['.json'] },
-                'presets': { src: 'OpenAI Settings', dest: 'library/presets', exts: ['.json'] },
+                'presets': { src: 'OpenAI Settings', dest: 'library/presets/OpenAI Settings', exts: ['.json'] },
+                'presets_textgen': { src: 'TextGen Settings', dest: 'library/presets/TextGen Settings', exts: ['.json'] },
+                'presets_novel': { src: 'NovelAI Settings', dest: 'library/presets/NovelAI Settings', exts: ['.json'] },
+                'presets_kobold': { src: 'KoboldAI Settings', dest: 'library/presets/KoboldAI Settings', exts: ['.json'] },
                 'regex': { src: 'scripts/extensions/regex', dest: 'library/extensions/regex', exts: ['.json'] },
                 'quick_replies': { src: 'scripts/extensions/quick-replies', dest: 'library/extensions/quick-replies', exts: ['.json'] }
             };

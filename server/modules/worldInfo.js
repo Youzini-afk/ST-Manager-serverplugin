@@ -471,6 +471,11 @@ function scanEmbeddedWorldbooksForList(charactersDir, items, search) {
 function getWorldbook(worldbookId) {
     if (!worldbookId) return null;
 
+    // 从插件的 library 目录读取
+    const pluginDataDir = config.getPluginDataDir();
+    const libraryRoot = path.join(pluginDataDir, 'library');
+
+    // 保留用于 embedded 类型
     const dataRoot = config.getDataRoot();
     const resourceDirs = config.getResourceDirs();
     const resourcesRoot = config.getResourcesRoot();
@@ -480,7 +485,7 @@ function getWorldbook(worldbookId) {
 
     if (parts[0] === 'global' && parts.length >= 2) {
         const filename = parts.slice(1).join('::');
-        const fullPath = path.join(dataRoot, resourceDirs.worldbooks, filename);
+        const fullPath = path.join(libraryRoot, 'lorebooks', filename);
 
         if (fs.existsSync(fullPath)) {
             try {
@@ -518,7 +523,7 @@ function getWorldbook(worldbookId) {
         }
     } else if (parts[0] === 'embedded' && parts.length >= 2) {
         const cardFile = parts.slice(1).join('::');
-        const fullPath = path.join(dataRoot, resourceDirs.characters, cardFile);
+        const fullPath = path.join(libraryRoot, 'characters', cardFile);
 
         if (fs.existsSync(fullPath)) {
             try {
