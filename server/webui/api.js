@@ -615,7 +615,7 @@ function registerRoutes(app, staticDir) {
     app.get('/api/regex/global', (req, res) => {
         try {
             const result = regex.getGlobalRegex();
-            res.json({ success: true, data: result });
+            res.json({ success: true, ...result, data: result });
         } catch (e) {
             res.json({ success: false, error: e.message });
         }
@@ -624,8 +624,8 @@ function registerRoutes(app, staticDir) {
     // 聚合正则
     app.get('/api/regex/aggregate', (req, res) => {
         try {
-            const result = regex.aggregateRegexScripts();
-            res.json(result);
+            const result = regex.aggregateRegex();
+            res.json({ success: true, ...result, data: result });
         } catch (e) {
             res.json({ success: false, error: e.message });
         }

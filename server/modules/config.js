@@ -15,6 +15,195 @@ let dataRoot = '';         // 用户数据目录 (data/default-user)
 let configPath = '';       // 插件配置文件路径
 let pluginConfig = {};     // 插件配置对象
 let pluginDataDir = '';    // 插件数据目录
+let pluginRoot = '';       // 插件根目录
+let legacyPluginDataDir = ''; // 旧插件数据目录 (data/plugins/st-manager)
+
+// ==================== 路径探测 ====================
+
+function _isDir(p) {
+    try {
+        return fs.existsSync(p) && fs.statSync(p).isDirectory();
+    } catch (e) {
+        return false;
+    }
+}
+
+function _looksLikeUserDir(p) {
+    if (!_isDir(p)) return false;
+    const markers = [
+        'settings.json',
+        'characters',
+        'worlds',
+        'OpenAI Settings',
+        'presets',
+        'regex',
+        'QuickReplies',
+        'scripts',
+    ];
+    for (const name of markers) {
+        if (fs.existsSync(path.join(p, name))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function findUserDirFromDataDir(dataDir) {
+    if (!_isDir(dataDir)) return null;
+
+    const defaultUser = path.join(dataDir, 'default-user');
+    if (_isDir(defaultUser)) {
+        return defaultUser;
+    }
+
+    try {
+        const entries = fs.readdirSync(dataDir);
+        const candidates = [];
+        for (const entry of entries) {
+            const entryPath = path.join(dataDir, entry);
+            if (!_isDir(entryPath)) continue;
+
+            let score = 0;
+            if (fs.existsSync(path.join(entryPath, 'settings.json'))) {
+                score += 5;
+            }
+            const subs = ['characters', 'worlds', 'OpenAI Settings', 'presets', 'regex', 'QuickReplies', 'scripts'];
+            for (const sub of subs) {
+                if (fs.existsSync(path.join(entryPath, sub))) {
+                    score += 1;
+                }
+            }
+            if (score > 0) {
+                candidates.push({ score, path: entryPath });
+            }
+        }
+
+        if (candidates.length > 0) {
+            candidates.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return a.path.localeCompare(b.path);
+            });
+            return candidates[0].path;
+        }
+    } catch (e) {
+        return null;
+    }
+
+    return null;
+}
+
+function resolveUserDataDir(inputPath) {
+    if (!inputPath) return null;
+
+    let normalized = path.normalize(inputPath);
+    if (!fs.existsSync(normalized)) return null;
+
+    try {
+        if (fs.statSync(normalized).isFile()) {
+            normalized = path.dirname(normalized);
+        }
+    } catch (e) {
+        return null;
+    }
+
+    const parts = normalized.split(path.sep);
+    const idx = parts.findIndex(p => p.toLowerCase() === 'default-user');
+    if (idx >= 0) {
+        return parts.slice(0, idx + 1).join(path.sep);
+    }
+
+    if (_looksLikeUserDir(normalized)) {
+        return normalized;
+    }
+
+    const base = path.basename(normalized).toLowerCase();
+    if (base === 'data') {
+        const found = findUserDirFromDataDir(normalized);
+        return found || path.join(normalized, 'default-user');
+    }
+
+    const dataDir = path.join(normalized, 'data');
+    if (_isDir(dataDir)) {
+        const found = findUserDirFromDataDir(dataDir);
+        return found || path.join(dataDir, 'default-user');
+    }
+
+    return null;
+}
+
+function recomputeDataRoot() {
+    let resolved = null;
+    if (pluginConfig && pluginConfig.st_data_dir) {
+        resolved = resolveUserDataDir(pluginConfig.st_data_dir);
+    }
+    if (!resolved) {
+        const fallback = path.join(stRoot, 'data', 'default-user');
+        resolved = resolveUserDataDir(fallback) || fallback;
+    }
+    dataRoot = resolved;
+}
+
+function getPluginRoot() {
+    return pluginRoot;
+}
+
+function getStorageRoot() {
+    return pluginDataDir;
+}
+
+function getSystemDir() {
+    return path.join(pluginDataDir, 'system');
+}
+
+function getTempDir() {
+    return path.join(pluginDataDir, 'temp');
+}
+
+function getDbDir() {
+    return path.join(getSystemDir(), 'db');
+}
+
+function getLegacyUiDataPath() {
+    if (!legacyPluginDataDir) return '';
+    return path.join(legacyPluginDataDir, 'ui_data.json');
+}
+
+function migrateLegacyRulesIfNeeded(targetDir) {
+    if (!legacyPluginDataDir) return;
+    const legacyRulesDir = path.join(legacyPluginDataDir, 'automation');
+    if (!fs.existsSync(legacyRulesDir)) return;
+
+    try {
+        const hasNewFiles = fs.existsSync(targetDir) && fs.readdirSync(targetDir).some(f => f.endsWith('.json'));
+        if (hasNewFiles) return;
+    } catch (e) {
+        return;
+    }
+
+    try {
+        const files = fs.readdirSync(legacyRulesDir);
+        for (const file of files) {
+            if (!file.endsWith('.json')) continue;
+            const src = path.join(legacyRulesDir, file);
+            const dest = path.join(targetDir, file);
+            if (!fs.existsSync(dest)) {
+                fs.copyFileSync(src, dest);
+            }
+        }
+    } catch (e) {
+        console.error('[ST Manager] 迁移旧规则集失败:', e);
+    }
+}
+
+function ensureStorageLayout() {
+    ensureDir(pluginDataDir);
+    ensureDir(getSystemDir());
+    ensureDir(path.join(getSystemDir(), 'automation'));
+    ensureDir(getDbDir());
+    ensureDir(path.join(getSystemDir(), 'thumbnails'));
+    ensureDir(path.join(getSystemDir(), 'trash'));
+    ensureDir(getTempDir());
+}
 
 /**
  * 初始化配置
@@ -36,15 +225,14 @@ function init() {
     }
     
     stRoot = currentDir;
-    
-    // 酒馆用户数据目录
+    // 默认酒馆用户数据目录（后续会根据配置再修正）
     dataRoot = path.join(stRoot, 'data', 'default-user');
     
     // 插件数据目录
-    pluginDataDir = path.join(stRoot, 'data', 'plugins', 'st-manager');
-    if (!fs.existsSync(pluginDataDir)) {
-        fs.mkdirSync(pluginDataDir, { recursive: true });
-    }
+    pluginRoot = path.resolve(__dirname, '..', '..');
+    pluginDataDir = path.join(pluginRoot, 'data');
+    legacyPluginDataDir = path.join(stRoot, 'data', 'plugins', 'st-manager');
+    ensureStorageLayout();
     
     configPath = path.join(pluginDataDir, 'config.json');
     
@@ -56,7 +244,20 @@ function init() {
             console.error('[ST Manager] 加载配置失败:', e);
             pluginConfig = {};
         }
+    } else if (legacyPluginDataDir && fs.existsSync(path.join(legacyPluginDataDir, 'config.json'))) {
+        try {
+            const legacyPath = path.join(legacyPluginDataDir, 'config.json');
+            pluginConfig = JSON.parse(fs.readFileSync(legacyPath, 'utf-8'));
+            // 迁移到新位置
+            fs.writeFileSync(configPath, JSON.stringify(pluginConfig, null, 2), 'utf-8');
+        } catch (e) {
+            console.error('[ST Manager] 迁移旧配置失败:', e);
+            pluginConfig = {};
+        }
     }
+
+    // 根据配置修正用户数据目录
+    recomputeDataRoot();
     
     console.log('[ST Manager] 配置初始化完成');
     console.log('[ST Manager] SillyTavern 根目录:', stRoot);
@@ -162,10 +363,9 @@ function getBackupRoot() {
  * 获取规则集目录
  */
 function getRulesDir() {
-    const dir = path.join(pluginDataDir, 'automation');
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
+    const dir = path.join(getSystemDir(), 'automation');
+    ensureDir(dir);
+    migrateLegacyRulesIfNeeded(dir);
     return dir;
 }
 
@@ -174,7 +374,7 @@ function getRulesDir() {
  * 用于存储卡片与资源文件夹的绑定关系
  */
 function getUiDataPath() {
-    return path.join(pluginDataDir, 'ui_data.json');
+    return path.join(getDbDir(), 'ui_data.json');
 }
 
 /**
@@ -188,6 +388,17 @@ function loadUiData() {
         } catch (e) {
             console.error('[ST Manager] 加载 UI 数据失败:', e);
         }
+    } else {
+        const legacyPath = getLegacyUiDataPath();
+        if (legacyPath && fs.existsSync(legacyPath)) {
+            try {
+                const data = JSON.parse(fs.readFileSync(legacyPath, 'utf-8'));
+                saveUiData(data);
+                return data;
+            } catch (e) {
+                console.error('[ST Manager] 迁移旧 UI 数据失败:', e);
+            }
+        }
     }
     return {};
 }
@@ -198,6 +409,7 @@ function loadUiData() {
 function saveUiData(data) {
     const uiPath = getUiDataPath();
     try {
+        ensureDir(path.dirname(uiPath));
         fs.writeFileSync(uiPath, JSON.stringify(data, null, 2), 'utf-8');
         return true;
     } catch (e) {
@@ -213,6 +425,9 @@ function get() {
     return {
         stRoot,
         dataRoot,
+        pluginRoot,
+        storageRoot: pluginDataDir,
+        st_data_dir: pluginConfig.st_data_dir || '',
         resourcesRoot: getResourcesRoot(),
         backupPath: getBackupRoot(),
         backup: pluginConfig.backup || {
@@ -234,6 +449,7 @@ function update(newConfig) {
     
     try {
         fs.writeFileSync(configPath, JSON.stringify(pluginConfig, null, 2), 'utf-8');
+        recomputeDataRoot();
         return { success: true };
     } catch (e) {
         console.error('[ST Manager] 保存配置失败:', e);
@@ -265,7 +481,11 @@ module.exports = {
     init,
     getStRoot,
     getDataRoot,
+    getPluginRoot,
     getPluginDataDir,
+    getStorageRoot,
+    getSystemDir,
+    getTempDir,
     getResourceDirs,
     getResourcesRoot,
     getResourceSubDirs,

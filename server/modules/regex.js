@@ -423,20 +423,66 @@ function extractGlobalRegexFromSettings(raw) {
 /**
  * 获取 settings.json 路径
  */
+function findSettingsInDataRoot(dataDir) {
+    if (!dataDir || !fs.existsSync(dataDir)) return null;
+    try {
+        const stat = fs.statSync(dataDir);
+        if (!stat.isDirectory()) return null;
+    } catch (e) {
+        return null;
+    }
+
+    const defaultPath = path.join(dataDir, 'default-user', 'settings.json');
+    if (fs.existsSync(defaultPath)) {
+        return defaultPath;
+    }
+
+    try {
+        const entries = fs.readdirSync(dataDir);
+        for (const entry of entries) {
+            const entryPath = path.join(dataDir, entry);
+            try {
+                if (!fs.statSync(entryPath).isDirectory()) continue;
+                const candidate = path.join(entryPath, 'settings.json');
+                if (fs.existsSync(candidate)) {
+                    return candidate;
+                }
+            } catch (e) {
+                continue;
+            }
+        }
+    } catch (e) {
+        return null;
+    }
+
+    return null;
+}
+
 function getSettingsPath() {
     const stDataDir = config.getDataRoot();
     if (!stDataDir) {
         return null;
     }
 
+    const candidates = [];
+    if (path.basename(stDataDir).toLowerCase() === 'data') {
+        const fromDataRoot = findSettingsInDataRoot(stDataDir);
+        if (fromDataRoot) {
+            candidates.push(fromDataRoot);
+        }
+    }
+
     // 尝试多个可能的位置
-    const candidates = [
+    candidates.push(
         path.join(stDataDir, 'settings.json'),
         path.join(stDataDir, '..', 'settings.json'),
         path.join(config.getStRoot(), 'data', 'settings.json'),
-    ];
+    );
 
+    const seen = new Set();
     for (const p of candidates) {
+        if (!p || seen.has(p)) continue;
+        seen.add(p);
         if (fs.existsSync(p)) {
             return p;
         }
