@@ -592,17 +592,17 @@ function registerRoutes(app, staticDir) {
     // 获取扩展列表
     app.get('/api/extensions/list', (req, res) => {
         try {
-            const { search, page, page_size } = req.query;
-            const result = extensions.listExtensions({
-                search,
-                page: parseInt(page) || 1,
-                pageSize: parseInt(page_size) || 50,
-            });
+            const { mode, filter_type, filterType, search } = req.query;
+            const items = extensions.listExtensions(
+                mode || 'regex',
+                filter_type || filterType || 'all',
+                (search || '').trim()
+            );
             
             res.json({
                 success: true,
-                items: result.extensions || [],
-                total: result.total || 0,
+                items: items || [],
+                total: items.length || 0,
             });
         } catch (e) {
             res.json({ success: false, error: e.message, items: [], total: 0 });

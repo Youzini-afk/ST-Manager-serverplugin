@@ -485,8 +485,22 @@ async function init(router) {
     // 兼容旧路由
     router.get('/regex/list', (req, res) => {
         try {
-            const { filterType, search } = req.query;
-            const items = extensions.listExtensions('regex', filterType || 'all', search || '');
+            const { search } = req.query;
+            let items = regex.listRegexScripts();
+            if (search) {
+                const key = String(search).toLowerCase().trim();
+                if (key) {
+                    items = items.filter(item => {
+                        const haystack = [
+                            item.name,
+                            item.filename,
+                            item.findRegex,
+                            item.find_regex,
+                        ].filter(Boolean).join(' ').toLowerCase();
+                        return haystack.includes(key);
+                    });
+                }
+            }
             res.json({ success: true, items, count: items.length });
         } catch (e) {
             console.error('[ST Manager] 获取正则脚本列表失败:', e);

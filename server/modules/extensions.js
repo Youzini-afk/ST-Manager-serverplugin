@@ -9,6 +9,35 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const regex = require('./regex');
+
+function getRegexGlobalDir(dataRoot, resourceDirs) {
+    const preferred = path.join(dataRoot, 'regex');
+    if (fs.existsSync(preferred)) {
+        return preferred;
+    }
+
+    const legacy = path.join(dataRoot, resourceDirs.regexes);
+    if (fs.existsSync(legacy)) {
+        return legacy;
+    }
+
+    return regex.getRegexDir() || preferred;
+}
+
+function getRegexWriteDir(dataRoot, resourceDirs) {
+    const preferred = path.join(dataRoot, 'regex');
+    if (fs.existsSync(preferred)) {
+        return preferred;
+    }
+
+    const legacy = path.join(dataRoot, resourceDirs.regexes);
+    if (fs.existsSync(legacy)) {
+        return legacy;
+    }
+
+    return preferred;
+}
 
 /**
  * 列出扩展文件
@@ -40,7 +69,7 @@ function listExtensions(mode = 'regex', filterType = 'all', search = '') {
             break;
         case 'regex':
         default:
-            targetGlobalDir = path.join(dataRoot, resourceDirs.regexes);
+            targetGlobalDir = getRegexGlobalDir(dataRoot, resourceDirs);
             targetResSub = resourceSubDirs.regexes;
             break;
     }
@@ -191,10 +220,10 @@ function getExtension(extensionId) {
         
         // 尝试所有可能的全局目录
         const dirs = [
-            path.join(dataRoot, resourceDirs.regexes),
+            getRegexGlobalDir(dataRoot, resourceDirs),
             path.join(dataRoot, resourceDirs.scripts),
             path.join(dataRoot, resourceDirs.quickreplies),
-        ];
+        ].filter(Boolean);
         
         for (const dir of dirs) {
             const fullPath = path.join(dir, filename);
@@ -357,8 +386,10 @@ function uploadExtension(fileContent, filename, targetType = null) {
         // 决定保存路径
         let finalDir = null;
         
+        const regexWriteDir = getRegexWriteDir(dataRoot, resourceDirs);
+
         if (targetType === 'regex' && isRegex) {
-            finalDir = path.join(dataRoot, resourceDirs.regexes);
+            finalDir = regexWriteDir;
         } else if (targetType === 'scripts' && isScript) {
             finalDir = path.join(dataRoot, resourceDirs.scripts);
         } else if (targetType === 'quick_replies' && isQr) {
@@ -368,7 +399,7 @@ function uploadExtension(fileContent, filename, targetType = null) {
             if (isScript) {
                 finalDir = path.join(dataRoot, resourceDirs.scripts);
             } else if (isRegex) {
-                finalDir = path.join(dataRoot, resourceDirs.regexes);
+                finalDir = regexWriteDir;
             } else if (isQr) {
                 finalDir = path.join(dataRoot, resourceDirs.quickreplies);
             }

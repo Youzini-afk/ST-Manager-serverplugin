@@ -502,8 +502,10 @@ function getRegexDir() {
 
     const candidates = [
         path.join(stDataDir, 'regex'),
+        path.join(stDataDir, 'extensions', 'regex'),
         // SillyTavern 扩展目录格式
         path.join(stDataDir, 'scripts', 'extensions', 'regex'),
+        path.join(config.getStRoot(), 'public', 'scripts', 'regex'),
     ];
 
     for (const p of candidates) {
@@ -571,18 +573,64 @@ function listRegexScripts() {
                 const content = fs.readFileSync(filepath, 'utf-8');
                 const data = JSON.parse(content);
 
+                const baseId = filename.replace(/\.json$/i, '');
+                if (Array.isArray(data)) {
+                    data.forEach((script, idx) => {
+                        if (!script || typeof script !== 'object') return;
+                        const scriptId = script.id || `${baseId}_${idx + 1}`;
+                        const name = script.scriptName || script.name || scriptId;
+                        const enabled = 'enabled' in script
+                            ? coerceBool(script.enabled)
+                            : !coerceBool(script.disabled);
+                        const findRegex = script.findRegex || script.regex || '';
+                        const replaceString = script.replaceString || script.replace || '';
+                        scripts.push({
+                            id: scriptId,
+                            filename: filename,
+                            name,
+                            enabled,
+                            findRegex,
+                            replaceString,
+                            find_regex: findRegex,
+                            replace_string: replaceString,
+                            filepath: filepath,
+                            data: script,
+                        });
+                    });
+                } else {
+                    const name = data.scriptName || data.name || baseId;
+                    const enabled = 'enabled' in data
+                        ? coerceBool(data.enabled)
+                        : !coerceBool(data.disabled);
+                    const findRegex = data.findRegex || data.regex || '';
+                    const replaceString = data.replaceString || data.replace || '';
+                    scripts.push({
+                        id: data.id || baseId,
+                        filename: filename,
+                        name,
+                        enabled,
+                        findRegex,
+                        replaceString,
+                        find_regex: findRegex,
+                        replace_string: replaceString,
+                        filepath: filepath,
+                        data: data,
+                    });
+                }
+            } catch (e) {
+                console.warn(`[ST Manager] 读取正则脚本 ${filename} 失败:`, e.message);
                 scripts.push({
                     id: filename.replace(/\.json$/i, ''),
                     filename: filename,
-                    name: data.scriptName || data.name || filename.replace(/\.json$/i, ''),
-                    enabled: !coerceBool(data.disabled),
-                    find_regex: data.findRegex || '',
-                    replace_string: data.replaceString || '',
+                    name: filename.replace(/\.json$/i, ''),
+                    enabled: false,
+                    findRegex: '',
+                    replaceString: '',
+                    find_regex: '',
+                    replace_string: '',
                     filepath: filepath,
-                    data: data,
+                    error: e.message,
                 });
-            } catch (e) {
-                console.warn(`[ST Manager] 读取正则脚本 ${filename} 失败:`, e.message);
             }
         }
     } catch (e) {

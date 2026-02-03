@@ -334,8 +334,9 @@ function getResourcesRoot() {
     if (customPath && fs.existsSync(customPath)) {
         return customPath;
     }
-    // SillyTavern 默认的 card_assets 目录
-    return path.join(stRoot, 'data', 'default-user', 'card_assets');
+    // SillyTavern 默认的 card_assets 目录（跟随当前用户数据目录）
+    const base = dataRoot || path.join(stRoot, 'data', 'default-user');
+    return path.join(base, 'card_assets');
 }
 
 /**
