@@ -132,6 +132,11 @@ function listCards(options = {}) {
     const pluginDataDir = config.getPluginDataDir();
     const charactersDir = path.join(pluginDataDir, 'library', 'characters');
 
+    console.log('[ST Manager] listCards 调试:');
+    console.log('  - pluginDataDir:', pluginDataDir);
+    console.log('  - charactersDir:', charactersDir);
+    console.log('  - 目录存在:', fs.existsSync(charactersDir));
+
     const items = [];
 
     if (!fs.existsSync(charactersDir)) {
@@ -139,8 +144,21 @@ function listCards(options = {}) {
         return { success: true, items: [], total: 0, page, pageSize };
     }
 
+    // 读取目录内容
+    try {
+        const files = fs.readdirSync(charactersDir);
+        console.log('  - 目录文件数量:', files.length);
+        if (files.length > 0) {
+            console.log('  - 前5个文件:', files.slice(0, 5).join(', '));
+        }
+    } catch (e) {
+        console.log('  - 读取目录错误:', e.message);
+    }
+
     // 递归扫描
     scanCardsRecursive(charactersDir, charactersDir, items);
+
+    console.log('  - 扫描到的角色卡数量:', items.length);
 
     // 过滤
     let filtered = items;
