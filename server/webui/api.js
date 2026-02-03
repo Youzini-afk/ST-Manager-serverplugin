@@ -269,9 +269,9 @@ function initModules(modules) {
  * 注册所有 API 路由
  */
 function registerRoutes(app, staticDir) {
-    
+
     // ============ 系统 API ============
-    
+
     // 服务器状态（前端轮询用）
     app.get('/api/status', (req, res) => {
         try {
@@ -288,16 +288,16 @@ function registerRoutes(app, staticDir) {
                 ...stats
             });
         } catch (e) {
-            res.json({ 
-                status: 'ready', 
+            res.json({
+                status: 'ready',
                 message: '资源库已就绪',
-                scanning: false, 
+                scanning: false,
                 progress: 0,
-                total: 0 
+                total: 0
             });
         }
     });
-    
+
     // 获取设置
     app.get('/api/get_settings', (req, res) => {
         try {
@@ -307,7 +307,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 保存设置
     app.post('/api/save_settings', (req, res) => {
         try {
@@ -318,7 +318,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 立即扫描
     app.post('/api/scan_now', (req, res) => {
         try {
@@ -330,17 +330,17 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 系统操作
     app.post('/api/system_action', (req, res) => {
         try {
             const { action, ...data } = req.body || {};
-            
+
             switch (action) {
                 case 'open_folder':
                     if (data.path && fs.existsSync(data.path)) {
-                        const cmd = process.platform === 'win32' 
-                            ? `explorer "${data.path}"` 
+                        const cmd = process.platform === 'win32'
+                            ? `explorer "${data.path}"`
                             : `open "${data.path}"`;
                         exec(cmd);
                     }
@@ -359,14 +359,14 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 回收站
     app.post('/api/trash/open', (req, res) => {
         try {
             const trashPath = config ? config.getTrashPath() : null;
             if (trashPath && fs.existsSync(trashPath)) {
-                const cmd = process.platform === 'win32' 
-                    ? `explorer "${trashPath}"` 
+                const cmd = process.platform === 'win32'
+                    ? `explorer "${trashPath}"`
                     : `open "${trashPath}"`;
                 exec(cmd);
                 res.json({ success: true });
@@ -377,9 +377,9 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // ============ 角色卡 API ============
-    
+
     // 获取角色卡列表
     app.get('/api/list_cards', (req, res) => {
         try {
@@ -394,7 +394,7 @@ function registerRoutes(app, staticDir) {
                 sort: sort || 'name',
                 recursive: recursive === 'true',
             });
-            
+
             // 转换为 Python 格式响应
             res.json({
                 success: true,
@@ -410,7 +410,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message, cards: [], total: 0 });
         }
     });
-    
+
     // 获取原始元数据
     app.post('/api/get_raw_metadata', (req, res) => {
         try {
@@ -425,15 +425,15 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 获取角色卡详情
     app.post('/api/get_card_detail', (req, res) => {
         try {
             const { id, ...options } = req.body || {};
             const card = cards.getCard(id, options);
             if (card) {
-                res.json({ 
-                    success: true, 
+                res.json({
+                    success: true,
                     card: card,
                     ui_data: card.uiData || {},
                 });
@@ -444,7 +444,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 更新角色卡
     app.post('/api/update_card', (req, res) => {
         try {
@@ -455,7 +455,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 切换收藏
     app.post('/api/toggle_favorite', (req, res) => {
         try {
@@ -466,7 +466,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 移动卡片
     app.post('/api/move_card', (req, res) => {
         try {
@@ -474,7 +474,7 @@ function registerRoutes(app, staticDir) {
             const ids = Array.isArray(card_ids) ? card_ids : [card_ids];
             let successCount = 0;
             const errors = [];
-            
+
             for (const id of ids) {
                 try {
                     const result = cards.moveCard(id, target_category);
@@ -484,9 +484,9 @@ function registerRoutes(app, staticDir) {
                     errors.push(e.message);
                 }
             }
-            
-            res.json({ 
-                success: successCount > 0, 
+
+            res.json({
+                success: successCount > 0,
                 moved: successCount,
                 total: ids.length,
                 errors: errors.length > 0 ? errors : undefined
@@ -495,32 +495,32 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 删除角色卡
     app.post('/api/delete_cards', (req, res) => {
         try {
             const { card_ids, delete_resources } = req.body || {};
             const ids = Array.isArray(card_ids) ? card_ids : [card_ids];
             let successCount = 0;
-            
+
             for (const id of ids) {
                 const result = cards.deleteCard(id, !delete_resources);
                 if (result.success) successCount++;
             }
-            
+
             res.json({ success: true, deleted: successCount, total: ids.length });
         } catch (e) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 检查资源目录
     app.post('/api/check_resource_folders', (req, res) => {
         try {
             const { card_ids } = req.body || {};
             const ids = Array.isArray(card_ids) ? card_ids : [card_ids];
             const results = {};
-            
+
             for (const id of ids) {
                 const card = cards.getCard(id);
                 results[id] = {
@@ -528,13 +528,13 @@ function registerRoutes(app, staticDir) {
                     path: card ? card.resourcePath : null
                 };
             }
-            
+
             res.json({ success: true, results });
         } catch (e) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 随机卡片
     app.post('/api/random_card', (req, res) => {
         try {
@@ -545,7 +545,7 @@ function registerRoutes(app, staticDir) {
                 search: params.search,
                 pageSize: 1000,
             });
-            
+
             if (result.cards && result.cards.length > 0) {
                 const randomIndex = Math.floor(Math.random() * result.cards.length);
                 res.json({ success: true, card: result.cards[randomIndex] });
@@ -556,7 +556,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 发送到 SillyTavern
     app.post('/api/send_to_st', (req, res) => {
         try {
@@ -567,7 +567,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 从 URL 导入
     app.post('/api/import_from_url', (req, res) => {
         try {
@@ -578,7 +578,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 更换头像 (FormData)
     app.post('/api/change_image', (req, res) => {
         try {
@@ -588,7 +588,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 更新卡片文件
     app.post('/api/update_card_file', (req, res) => {
         try {
@@ -597,7 +597,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 从 URL 更新卡片
     app.post('/api/update_card_from_url', (req, res) => {
         try {
@@ -608,7 +608,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 转换为聚合包
     app.post('/api/convert_to_bundle', (req, res) => {
         try {
@@ -619,7 +619,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 切换聚合模式
     app.post('/api/toggle_bundle_mode', (req, res) => {
         try {
@@ -630,7 +630,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 定位卡片页码
     app.post('/api/find_card_page', (req, res) => {
         try {
@@ -641,7 +641,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 创建文件夹
     app.post('/api/create_folder', (req, res) => {
         try {
@@ -652,7 +652,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 重命名文件夹
     app.post('/api/rename_folder', (req, res) => {
         try {
@@ -663,7 +663,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 删除文件夹
     app.post('/api/delete_folder', (req, res) => {
         try {
@@ -674,9 +674,9 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // ============ 标签 API ============
-    
+
     // 获取所有标签
     app.get('/api/tags', (req, res) => {
         try {
@@ -686,26 +686,26 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message, tags: [] });
         }
     });
-    
+
     // 批量标签操作
     app.post('/api/batch_tags', (req, res) => {
         try {
             const { card_ids, add_tags, remove_tags } = req.body || {};
             let result = { success: true };
-            
+
             if (add_tags && add_tags.length > 0) {
                 result = cards.addTags(card_ids, add_tags);
             }
             if (remove_tags && remove_tags.length > 0) {
                 result = cards.removeTags(card_ids, remove_tags);
             }
-            
+
             res.json(result);
         } catch (e) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 删除标签
     app.post('/api/delete_tags', (req, res) => {
         try {
@@ -716,9 +716,9 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // ============ 世界书 API ============
-    
+
     // 获取世界书列表
     app.get('/api/world_info/list', (req, res) => {
         try {
@@ -729,7 +729,7 @@ function registerRoutes(app, staticDir) {
                 parseInt(page) || 1,
                 parseInt(page_size) || 50
             );
-            
+
             res.json({
                 success: true,
                 items: result.worldbooks || [],
@@ -741,7 +741,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message, items: [], total: 0 });
         }
     });
-    
+
     // 获取世界书详情
     app.post('/api/world_info/detail', (req, res) => {
         try {
@@ -756,7 +756,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 保存世界书
     app.post('/api/world_info/save', (req, res) => {
         try {
@@ -767,7 +767,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 删除世界书
     app.post('/api/world_info/delete', (req, res) => {
         try {
@@ -778,7 +778,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 上传世界书
     app.post('/api/upload_world_info', (req, res) => {
         try {
@@ -787,9 +787,9 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // ============ 预设 API ============
-    
+
     // 获取预设列表
     app.get('/api/presets/list', (req, res) => {
         try {
@@ -800,7 +800,7 @@ function registerRoutes(app, staticDir) {
                 page: parseInt(page) || 1,
                 pageSize: parseInt(page_size) || 50,
             });
-            
+
             res.json({
                 success: true,
                 items: result.presets || [],
@@ -810,7 +810,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message, items: [], total: 0 });
         }
     });
-    
+
     // 获取预设详情
     app.get('/api/presets/detail/:id(*)', (req, res) => {
         try {
@@ -824,9 +824,9 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // ============ 扩展 API ============
-    
+
     // 获取扩展列表
     app.get('/api/extensions/list', (req, res) => {
         try {
@@ -836,7 +836,7 @@ function registerRoutes(app, staticDir) {
                 filter_type || filterType || 'all',
                 (search || '').trim()
             );
-            
+
             res.json({
                 success: true,
                 items: items || [],
@@ -932,17 +932,194 @@ function registerRoutes(app, staticDir) {
         }
     });
 
-    // 资源同步（Web UI 仅做提示，真正同步需后端实现）
+    // 资源同步 - 从 SillyTavern 复制资源到本地
     app.post('/api/st/sync', (req, res) => {
-        res.json({
-            success: false,
-            error: 'ST 同步功能尚未在服务端插件中实现',
-            result: { success: 0, failed: 0 },
-        });
+        try {
+            const { resource_type, st_data_dir } = req.body || {};
+
+            if (!resource_type) {
+                return res.status(400).json({
+                    success: false,
+                    error: '请指定资源类型',
+                    result: { success: 0, failed: 0 }
+                });
+            }
+
+            // 解析源目录（当前 ST 的用户数据目录）
+            // 如果用户指定了 st_data_dir，优先使用它，否则使用当前 ST 的数据目录
+            let srcUserDir = null;
+            if (st_data_dir) {
+                srcUserDir = config && config.resolveUserDataDir
+                    ? config.resolveUserDataDir(st_data_dir)
+                    : null;
+            }
+            if (!srcUserDir) {
+                srcUserDir = config ? config.getDataRoot() : null;
+            }
+
+            if (!srcUserDir || !fs.existsSync(srcUserDir)) {
+                return res.json({
+                    success: false,
+                    error: '无法找到 SillyTavern 数据目录',
+                    result: { success: 0, failed: 0 }
+                });
+            }
+
+            // 获取目标目录（插件的私有存储目录 data/library）
+            const pluginDataDir = config ? config.getPluginDataDir() : path.join(__dirname, '..', '..', 'data');
+
+            // 资源目录映射：ST目录 → 插件存储目录
+            const resourceDirMap = {
+                'characters': { src: 'characters', dest: 'library/characters', exts: ['.png', '.json'] },
+                'worlds': { src: 'worlds', dest: 'library/lorebooks', exts: ['.json'] },
+                'presets': { src: 'OpenAI Settings', dest: 'library/presets', exts: ['.json'] },
+                'regex': { src: 'regex', dest: 'library/extensions/regex', exts: ['.json'] },
+                'quick_replies': { src: 'QuickReplies', dest: 'library/extensions/quick-replies', exts: ['.json'] }
+            };
+
+            const mapping = resourceDirMap[resource_type];
+            if (!mapping) {
+                return res.json({
+                    success: false,
+                    error: `未知资源类型: ${resource_type}`,
+                    result: { success: 0, failed: 0 }
+                });
+            }
+
+            // 源：ST 原始数据目录
+            const srcDir = path.join(srcUserDir, mapping.src);
+            // 目标：插件私有存储目录
+            const destDir = path.join(pluginDataDir, mapping.dest);
+
+            // 确保目标目录存在
+            if (!fs.existsSync(destDir)) {
+                fs.mkdirSync(destDir, { recursive: true });
+            }
+
+            let successCount = 0;
+            let failedCount = 0;
+            const errors = [];
+
+            // 检查源目录是否存在
+            if (!fs.existsSync(srcDir)) {
+                return res.json({
+                    success: true,
+                    result: { success: 0, failed: 0, skipped: 0 },
+                    message: `源目录不存在: ${srcDir}`
+                });
+            }
+
+            // 读取并复制文件
+            try {
+                const files = fs.readdirSync(srcDir);
+
+                for (const file of files) {
+                    const ext = path.extname(file).toLowerCase();
+                    if (!mapping.exts.includes(ext)) continue;
+
+                    const srcPath = path.join(srcDir, file);
+                    const destPath = path.join(destDir, file);
+
+                    try {
+                        // 检查是否是文件
+                        const stat = fs.statSync(srcPath);
+                        if (!stat.isFile()) continue;
+
+                        // 检查目标文件是否已存在且更新
+                        let needsCopy = true;
+                        if (fs.existsSync(destPath)) {
+                            const destStat = fs.statSync(destPath);
+                            // 如果目标文件较新或相同大小，跳过
+                            if (destStat.mtimeMs >= stat.mtimeMs && destStat.size === stat.size) {
+                                needsCopy = false;
+                            }
+                        }
+
+                        if (needsCopy) {
+                            fs.copyFileSync(srcPath, destPath);
+                            successCount++;
+                        }
+                    } catch (copyErr) {
+                        failedCount++;
+                        errors.push(`${file}: ${copyErr.message}`);
+                    }
+                }
+
+                // 对于正则类型，还需要从 settings.json 导出全局正则
+                if (resource_type === 'regex') {
+                    const settingsPath = path.join(userDir, 'settings.json');
+                    if (fs.existsSync(settingsPath)) {
+                        try {
+                            const settingsRaw = fs.readFileSync(settingsPath, 'utf-8');
+                            const settings = JSON.parse(settingsRaw);
+
+                            // 提取全局正则
+                            const extSettings = settings.extension_settings || {};
+                            const regexList = extSettings.regex || [];
+
+                            if (Array.isArray(regexList) && regexList.length > 0) {
+                                for (let i = 0; i < regexList.length; i++) {
+                                    const item = regexList[i];
+                                    if (!item || typeof item !== 'object') continue;
+
+                                    const scriptName = item.scriptName || `global_regex_${i + 1}`;
+                                    const safeFileName = scriptName.replace(/[<>:"/\\|?*]/g, '_') + '.json';
+                                    const destPath = path.join(destDir, 'global__' + safeFileName);
+
+                                    try {
+                                        const payload = { ...item, __source: 'settings.json' };
+                                        fs.writeFileSync(destPath, JSON.stringify(payload, null, 2), 'utf-8');
+                                        successCount++;
+                                    } catch (writeErr) {
+                                        failedCount++;
+                                        errors.push(`global_regex: ${writeErr.message}`);
+                                    }
+                                }
+                            }
+                        } catch (settingsErr) {
+                            console.warn('[ST Manager] 读取 settings.json 失败:', settingsErr.message);
+                        }
+                    }
+                }
+
+            } catch (readErr) {
+                return res.json({
+                    success: false,
+                    error: `读取目录失败: ${readErr.message}`,
+                    result: { success: 0, failed: 0 }
+                });
+            }
+
+            // 触发资源刷新
+            if (successCount > 0 && resources && resources.rescan) {
+                try {
+                    resources.rescan();
+                } catch (e) {
+                    console.warn('[ST Manager] 触发重新扫描失败:', e.message);
+                }
+            }
+
+            res.json({
+                success: true,
+                result: {
+                    success: successCount,
+                    failed: failedCount,
+                    errors: errors.length > 0 ? errors : undefined
+                }
+            });
+
+        } catch (e) {
+            console.error('[ST Manager] 同步失败:', e);
+            res.status(500).json({
+                success: false,
+                error: e.message,
+                result: { success: 0, failed: 0 }
+            });
+        }
     });
-    
+
     // ============ 正则 API ============
-    
+
     // 获取全局正则
     app.get('/api/regex/global', (req, res) => {
         try {
@@ -952,7 +1129,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 聚合正则
     app.get('/api/regex/aggregate', (req, res) => {
         try {
@@ -962,9 +1139,9 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // ============ 自动化 API ============
-    
+
     // 获取规则集列表
     app.get('/api/automation/rulesets', (req, res) => {
         try {
@@ -974,7 +1151,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message, rulesets: [] });
         }
     });
-    
+
     // 获取单个规则集
     app.get('/api/automation/rulesets/:id', (req, res) => {
         try {
@@ -988,7 +1165,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 保存规则集
     app.post('/api/automation/rulesets', (req, res) => {
         try {
@@ -999,7 +1176,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 删除规则集
     app.delete('/api/automation/rulesets/:id', (req, res) => {
         try {
@@ -1009,7 +1186,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 执行规则
     app.post('/api/automation/execute', (req, res) => {
         try {
@@ -1020,7 +1197,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 设置全局规则集
     app.post('/api/automation/global_setting', (req, res) => {
         try {
@@ -1031,9 +1208,9 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // ============ 备份 API ============
-    
+
     // 获取备份列表
     app.get('/api/backup/list', (req, res) => {
         try {
@@ -1044,7 +1221,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message, backups: [] });
         }
     });
-    
+
     // 创建备份
     app.post('/api/backup/create', (req, res) => {
         try {
@@ -1055,7 +1232,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 恢复备份
     app.post('/api/backup/restore', (req, res) => {
         try {
@@ -1066,9 +1243,9 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // ============ 资源 API ============
-    
+
     // 列出皮肤
     app.post('/api/list_resource_skins', (req, res) => {
         try {
@@ -1079,7 +1256,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 上传背景
     app.post('/api/upload_background', (req, res) => {
         try {
@@ -1088,7 +1265,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 设置资源目录
     app.post('/api/set_resource_folder', (req, res) => {
         try {
@@ -1098,15 +1275,15 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 打开资源目录
     app.post('/api/open_resource_folder', (req, res) => {
         try {
             const { card_id } = req.body || {};
             const card = cards.getCard(card_id);
             if (card && card.resourcePath && fs.existsSync(card.resourcePath)) {
-                const cmd = process.platform === 'win32' 
-                    ? `explorer "${card.resourcePath}"` 
+                const cmd = process.platform === 'win32'
+                    ? `explorer "${card.resourcePath}"`
                     : `open "${card.resourcePath}"`;
                 exec(cmd);
                 res.json({ success: true });
@@ -1117,7 +1294,7 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // 创建资源目录
     app.post('/api/create_resource_folder', (req, res) => {
         try {
@@ -1127,15 +1304,15 @@ function registerRoutes(app, staticDir) {
             res.json({ success: false, error: e.message });
         }
     });
-    
+
     // ============ 缩略图 ============
-    
+
     // 获取缩略图
     app.get('/api/thumbnail/:id(*)', (req, res) => {
         try {
             const id = req.params.id;
             const card = cards.getCard(id);
-            
+
             if (card && card.imagePath && fs.existsSync(card.imagePath)) {
                 res.sendFile(card.imagePath);
             } else {
@@ -1151,13 +1328,13 @@ function registerRoutes(app, staticDir) {
             res.status(500).end();
         }
     });
-    
+
     // 直接访问缩略图 (兼容 Python 的路径格式)
     app.get('/thumbnails/:filename(*)', (req, res) => {
         try {
             const filename = req.params.filename;
             const thumbPath = config ? config.getThumbnailPath() : null;
-            
+
             if (thumbPath) {
                 const filePath = path.join(thumbPath, filename);
                 if (fs.existsSync(filePath)) {
@@ -1165,7 +1342,7 @@ function registerRoutes(app, staticDir) {
                     return;
                 }
             }
-            
+
             // 尝试从卡片获取
             const card = cards.getCard(filename.replace(/\.[^.]+$/, ''));
             if (card && card.imagePath && fs.existsSync(card.imagePath)) {
@@ -1182,7 +1359,7 @@ function registerRoutes(app, staticDir) {
             res.status(500).end();
         }
     });
-    
+
     console.log('[ST Manager] API 路由已注册');
 }
 
