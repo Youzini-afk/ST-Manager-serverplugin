@@ -36,7 +36,8 @@ const PRESET_DIRS = {
 function getPresetDir(presetType = 'openai') {
     // 从插件的 library 目录读取同步后的预设
     const pluginDataDir = config.getPluginDataDir();
-    return path.join(pluginDataDir, 'library', 'presets');
+    const subDir = PRESET_DIRS[presetType] || 'OpenAI Settings';
+    return path.join(pluginDataDir, 'library', 'presets', subDir);
 }
 
 /**

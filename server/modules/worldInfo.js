@@ -332,6 +332,9 @@ function scanGlobalWorldbooks(globalDir, items, search, embeddedNameSet, embedde
                 isDuplicate: isDuplicateName || isDuplicateSig,
             };
 
+            // 跳过重复的世界书（角色绑定的世界书不应出现在全局列表中）
+            if (isDuplicateName || isDuplicateSig) continue;
+
             // 搜索过滤
             if (search) {
                 const haystack = `${item.name} ${item.filename}`.toLowerCase();

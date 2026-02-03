@@ -975,8 +975,8 @@ function registerRoutes(app, staticDir) {
                 'characters': { src: 'characters', dest: 'library/characters', exts: ['.png', '.json'] },
                 'worlds': { src: 'worlds', dest: 'library/lorebooks', exts: ['.json'] },
                 'presets': { src: 'OpenAI Settings', dest: 'library/presets', exts: ['.json'] },
-                'regex': { src: 'regex', dest: 'library/extensions/regex', exts: ['.json'] },
-                'quick_replies': { src: 'QuickReplies', dest: 'library/extensions/quick-replies', exts: ['.json'] }
+                'regex': { src: 'scripts/extensions/regex', dest: 'library/extensions/regex', exts: ['.json'] },
+                'quick_replies': { src: 'scripts/extensions/quick-replies', dest: 'library/extensions/quick-replies', exts: ['.json'] }
             };
 
             const mapping = resourceDirMap[resource_type];
