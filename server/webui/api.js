@@ -734,7 +734,7 @@ function registerRoutes(app, staticDir) {
 
             res.json({
                 success: true,
-                items: result.worldbooks || [],
+                items: result.items || [],
                 total: result.total || 0,
                 page: result.page || 1,
                 page_size: result.pageSize || 50,
@@ -805,7 +805,7 @@ function registerRoutes(app, staticDir) {
 
             res.json({
                 success: true,
-                items: result.presets || [],
+                items: result.items || [],
                 total: result.total || 0,
             });
         } catch (e) {

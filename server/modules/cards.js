@@ -212,9 +212,8 @@ function listCards(options = {}) {
 function getCard(cardId) {
     if (!cardId) return null;
 
-    const dataRoot = config.getDataRoot();
-    const resourceDirs = config.getResourceDirs();
-    const fullPath = path.join(dataRoot, resourceDirs.characters, cardId);
+    const pluginDataDir = config.getPluginDataDir();
+    const fullPath = path.join(pluginDataDir, 'library', 'characters', cardId);
 
     if (!fs.existsSync(fullPath)) return null;
 
@@ -231,6 +230,7 @@ function getCard(cardId) {
         return {
             id: cardId,
             path: fullPath,
+            imagePath: fullPath, // For thumbnail serving
             size: stat.size,
             mtime: stat.mtimeMs,
             data: cardData,
