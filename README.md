@@ -36,29 +36,21 @@ SillyTavern 资源管理与自动化工具 - 完整集成插件
 enableServerPlugins: true
 ```
 
-### 2. 安装服务端插件
+### 2. 克隆插件仓库
 
 ```bash
 cd SillyTavern/plugins
 git clone https://github.com/Youzini-afk/ST-Manager-serverplugin.git
 ```
 
-### 3. 构建前端（仅首次或更新时需要）
+### 3. 重启 SillyTavern
 
-```bash
-cd ST-Manager-serverplugin/client
-npm install
-npm run build
-```
+**✨ 就这么简单！**
 
-### 4. 重启 SillyTavern
-
-**✨ 重启后前端会自动安装！**
-
-插件启动时会自动将前端文件复制到：
-```
-SillyTavern/public/scripts/extensions/ST-Manager/
-```
+重启后：
+- ✅ 服务端插件自动加载
+- ✅ 前端扩展自动安装到 `public/scripts/extensions/ST-Manager/`
+- ✅ 前端文件已预构建，无需手动 npm build
 
 控制台会显示：
 ```
@@ -66,7 +58,7 @@ SillyTavern/public/scripts/extensions/ST-Manager/
 [ST Manager] 请在酒馆 UI 的 Extensions 面板中启用 ST Manager
 ```
 
-### 5. 在酒馆中启用
+### 4. 在酒馆中启用
 
 打开 SillyTavern Web 界面：
 1. 右侧面板 → **Extensions** 标签页
@@ -75,16 +67,13 @@ SillyTavern/public/scripts/extensions/ST-Manager/
 
 ---
 
-### 📝 前端手动安装（备选方案）
+### 🔧 开发者：重新构建前端
 
-如果自动安装失败，可以手动复制：
+仅在修改前端代码时需要：
 ```bash
-# 确保已构建前端
 cd ST-Manager-serverplugin/client
-npm run build
-
-# 手动复制到扩展目录
-cp -r dist/* ../../public/scripts/extensions/ST-Manager/
+npm install
+npx vite build
 ```
 
 ## 📁 目录结构

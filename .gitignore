@@ -2,13 +2,14 @@
 node_modules/
 package-lock.json
 
-# Build outputs
+# Build outputs (排除前端构建产物)
 dist/
 build/
 *.log
 
-# 但保留前端 manifest
-!client/dist/manifest.json
+# 但保留前端构建产物
+!client/dist/
+!client/dist/**
 
 # IDE
 .vscode/
