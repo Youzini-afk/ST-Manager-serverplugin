@@ -910,13 +910,14 @@ function startWebUIServer() {
         });
         
         // 启动服务器
+        const stPort = process.env.PORT || 8000;
         webApp.listen(WEB_PORT, () => {
             console.log('');
             console.log('═══════════════════════════════════════════════');
             console.log('  🌐 ST Manager Web UI 已启动');
             console.log('═══════════════════════════════════════════════');
             console.log(`  ✅ Web UI: http://localhost:${WEB_PORT}`);
-            console.log(`  📡 API: http://localhost:${stPort || 8000}/api/plugins/st-manager`);
+            console.log(`  📡 API: http://localhost:${stPort}/api/plugins/st-manager`);
             console.log('═══════════════════════════════════════════════');
             console.log('');
         });
