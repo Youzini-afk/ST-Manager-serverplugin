@@ -1002,8 +1002,17 @@ function registerRoutes(app, staticDir) {
             let failedCount = 0;
             const errors = [];
 
+            // 调试日志
+            console.log('[ST Manager] 同步调试信息:');
+            console.log('  - 资源类型:', resource_type);
+            console.log('  - 源用户目录:', srcUserDir);
+            console.log('  - 插件数据目录:', pluginDataDir);
+            console.log('  - 源目录:', srcDir);
+            console.log('  - 目标目录:', destDir);
+
             // 检查源目录是否存在
             if (!fs.existsSync(srcDir)) {
+                console.log('  - 源目录不存在!');
                 return res.json({
                     success: true,
                     result: { success: 0, failed: 0, skipped: 0 },
@@ -1014,6 +1023,11 @@ function registerRoutes(app, staticDir) {
             // 读取并复制文件
             try {
                 const files = fs.readdirSync(srcDir);
+                console.log('  - 源目录文件数量:', files.length);
+                if (files.length > 0) {
+                    console.log('  - 前5个文件:', files.slice(0, 5).join(', '));
+                    console.log('  - 允许的扩展名:', mapping.exts.join(', '));
+                }
 
                 for (const file of files) {
                     const ext = path.extname(file).toLowerCase();
