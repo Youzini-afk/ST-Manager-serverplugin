@@ -1029,6 +1029,8 @@ function registerRoutes(app, staticDir) {
                     console.log('  - 允许的扩展名:', mapping.exts.join(', '));
                 }
 
+                let skippedCount = 0;
+
                 for (const file of files) {
                     const ext = path.extname(file).toLowerCase();
                     if (!mapping.exts.includes(ext)) continue;
@@ -1048,18 +1050,23 @@ function registerRoutes(app, staticDir) {
                             // 如果目标文件较新或相同大小，跳过
                             if (destStat.mtimeMs >= stat.mtimeMs && destStat.size === stat.size) {
                                 needsCopy = false;
+                                skippedCount++;
                             }
                         }
 
                         if (needsCopy) {
                             fs.copyFileSync(srcPath, destPath);
                             successCount++;
+                            console.log(`  - 复制: ${file}`);
                         }
                     } catch (copyErr) {
                         failedCount++;
                         errors.push(`${file}: ${copyErr.message}`);
+                        console.log(`  - 失败: ${file} - ${copyErr.message}`);
                     }
                 }
+
+                console.log(`  - 结果: 成功=${successCount}, 跳过=${skippedCount}, 失败=${failedCount}`);
 
                 // 对于正则类型，使用专门的工具函数从 settings.json 导出全局正则
                 if (resource_type === 'regex') {
