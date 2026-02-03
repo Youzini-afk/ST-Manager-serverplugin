@@ -20,8 +20,22 @@ let pluginDataDir = '';    // 插件数据目录
  * 初始化配置
  */
 function init() {
-    // SillyTavern 根目录
-    stRoot = process.cwd();
+    // 检测 SillyTavern 根目录
+    // 当作为插件运行时，需要向上查找 SillyTavern 根目录
+    let currentDir = process.cwd();
+    
+    // 如果当前目录在 plugins/ 下，向上查找
+    if (currentDir.includes(path.sep + 'plugins' + path.sep)) {
+        // 从当前目录向上查找，直到找到包含 server.js 的目录
+        while (currentDir !== path.dirname(currentDir)) {
+            if (fs.existsSync(path.join(currentDir, 'server.js'))) {
+                break;
+            }
+            currentDir = path.dirname(currentDir);
+        }
+    }
+    
+    stRoot = currentDir;
     
     // 酒馆用户数据目录
     dataRoot = path.join(stRoot, 'data', 'default-user');
@@ -47,6 +61,16 @@ function init() {
     console.log('[ST Manager] 配置初始化完成');
     console.log('[ST Manager] SillyTavern 根目录:', stRoot);
     console.log('[ST Manager] 用户数据目录:', dataRoot);
+    
+    // 检查角色目录是否存在
+    const charsDir = path.join(dataRoot, 'characters');
+    if (fs.existsSync(charsDir)) {
+        const files = fs.readdirSync(charsDir);
+        const pngCount = files.filter(f => f.endsWith('.png')).length;
+        console.log('[ST Manager] 检测到角色卡数量:', pngCount);
+    } else {
+        console.warn('[ST Manager] 警告：角色目录不存在:', charsDir);
+    }
 }
 
 /**
@@ -251,7 +275,9 @@ module.exports = {
     loadUiData,
     saveUiData,
     get,
+    getConfig: get,  // 别名，兼容 API 调用
     update,
+    saveConfig: update,  // 别名，兼容 API 调用
     ensureDir,
     getFullPath,
 };
