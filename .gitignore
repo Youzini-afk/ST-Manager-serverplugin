@@ -26,3 +26,6 @@ Thumbs.db
 *.bak
 
 ST-Manager/
+
+# Plugin data directory (runtime generated)
+data/

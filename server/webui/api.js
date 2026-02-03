@@ -748,14 +748,20 @@ function registerRoutes(app, staticDir) {
     app.post('/api/world_info/detail', (req, res) => {
         try {
             const { id, source_type, file_path, preview_limit, force_full } = req.body || {};
+            console.log('[ST Manager] world_info/detail 请求:', { id, source_type, file_path });
+
             const wb = worldInfo.getWorldbook(id || file_path);
+            console.log('[ST Manager] getWorldbook 结果:', wb ? `找到 (entries: ${wb.data?.entries ? Object.keys(wb.data.entries).length : 0})` : '未找到');
+
             if (wb) {
                 // 前端期望 data 是世界书的原始 JSON 内容，不是包装对象
+                console.log('[ST Manager] 返回世界书数据, entries类型:', typeof wb.data?.entries, Array.isArray(wb.data?.entries) ? 'array' : 'object');
                 res.json({ success: true, data: wb.data });
             } else {
                 res.json({ success: false, error: '世界书不存在' });
             }
         } catch (e) {
+            console.error('[ST Manager] world_info/detail 错误:', e);
             res.json({ success: false, error: e.message });
         }
     });
@@ -854,11 +860,15 @@ function registerRoutes(app, staticDir) {
     app.get('/api/extensions/list', (req, res) => {
         try {
             const { mode, filter_type, filterType, search } = req.query;
+            console.log('[ST Manager] extensions/list 请求:', { mode, filter_type, filterType, search });
+
             const items = extensions.listExtensions(
                 mode || 'regex',
                 filter_type || filterType || 'all',
                 (search || '').trim()
             );
+
+            console.log('[ST Manager] extensions/list 结果:', items.length, '个项目');
 
             res.json({
                 success: true,
@@ -866,6 +876,7 @@ function registerRoutes(app, staticDir) {
                 total: items.length || 0,
             });
         } catch (e) {
+            console.error('[ST Manager] extensions/list 错误:', e);
             res.json({ success: false, error: e.message, items: [], total: 0 });
         }
     });
