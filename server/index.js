@@ -27,6 +27,82 @@ const info = {
 };
 
 /**
+ * 自动安装前端扩展
+ */
+function autoInstallFrontend() {
+    try {
+        // 获取 SillyTavern 根目录
+        const stRoot = process.cwd();
+        
+        // 前端源目录
+        const pluginDir = path.join(__dirname, '..');
+        const clientDistDir = path.join(pluginDir, 'client', 'dist');
+        
+        // 前端目标目录
+        const extensionsDir = path.join(stRoot, 'public', 'scripts', 'extensions');
+        const targetDir = path.join(extensionsDir, 'ST-Manager');
+        
+        // 检查源目录
+        if (!fs.existsSync(clientDistDir)) {
+            console.log('[ST Manager] 前端源文件不存在，跳过自动安装');
+            console.log('[ST Manager] 请先构建前端: cd client && npm install && npm run build');
+            return false;
+        }
+        
+        // 确保目标目录存在
+        if (!fs.existsSync(extensionsDir)) {
+            console.warn('[ST Manager] 扩展目录不存在:', extensionsDir);
+            return false;
+        }
+        
+        // 创建目标目录
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+            console.log('[ST Manager] 创建前端扩展目录:', targetDir);
+        }
+        
+        // 复制文件
+        const filesToCopy = ['index.iife.js', 'style.css', 'manifest.json'];
+        let copiedFiles = 0;
+        
+        for (const file of filesToCopy) {
+            const srcFile = path.join(clientDistDir, file);
+            const destFile = path.join(targetDir, file);
+            
+            if (fs.existsSync(srcFile)) {
+                // 检查是否需要更新
+                let needsCopy = !fs.existsSync(destFile);
+                
+                if (!needsCopy) {
+                    const srcStats = fs.statSync(srcFile);
+                    const destStats = fs.statSync(destFile);
+                    needsCopy = srcStats.mtimeMs > destStats.mtimeMs;
+                }
+                
+                if (needsCopy) {
+                    fs.copyFileSync(srcFile, destFile);
+                    console.log(`[ST Manager] 复制前端文件: ${file}`);
+                    copiedFiles++;
+                }
+            }
+        }
+        
+        if (copiedFiles > 0) {
+            console.log(`[ST Manager] ✅ 前端扩展已自动安装/更新 (${copiedFiles} 个文件)`);
+            console.log(`[ST Manager] 前端位置: ${targetDir}`);
+            console.log('[ST Manager] 请在酒馆 UI 的 Extensions 面板中启用 ST Manager');
+        } else {
+            console.log('[ST Manager] 前端扩展已是最新版本');
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('[ST Manager] 自动安装前端失败:', error.message);
+        return false;
+    }
+}
+
+/**
  * 初始化插件
  * @param {import('express').Router} router Express 路由器
  */
@@ -35,6 +111,9 @@ async function init(router) {
     
     // 初始化配置
     config.init();
+    
+    // 自动安装前端扩展
+    autoInstallFrontend();
     
     // ============ 健康检查 ============
     router.get('/health', (req, res) => {

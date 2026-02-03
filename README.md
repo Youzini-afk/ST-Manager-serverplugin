@@ -43,39 +43,49 @@ cd SillyTavern/plugins
 git clone https://github.com/Youzini-afk/ST-Manager-serverplugin.git
 ```
 
-### 3. 安装前端扩展
+### 3. 构建前端（仅首次或更新时需要）
 
-#### 方式 A：手动复制（推荐新手）
-1. 构建前端：
-   ```bash
-   cd ST-Manager-serverplugin/client
-   npm install
-   npm run build
-   ```
-2. 复制 `dist` 文件夹内容到 SillyTavern 的扩展目录：
-   ```
-   SillyTavern/public/scripts/extensions/ST-Manager/
-   ```
-3. 在酒馆Web界面的 **扩展面板** 中启用 ST Manager
-
-#### 方式 B：自动安装（仓库方式）
-编辑 `config.yaml` 的 `extensions` 部分：
-```yaml
-extensions:
-  - url: "https://github.com/Youzini-afk/ST-Manager-serverplugin"
-    enabled: true
+```bash
+cd ST-Manager-serverplugin/client
+npm install
+npm run build
 ```
 
 ### 4. 重启 SillyTavern
 
-重启后，插件会自动加载，前端也会显示在界面中。
+**✨ 重启后前端会自动安装！**
 
-### 5. 在酒馆中使用
+插件启动时会自动将前端文件复制到：
+```
+SillyTavern/public/scripts/extensions/ST-Manager/
+```
 
-安装完成后，打开 SillyTavern：
-- 前端 UI 会显示在**右侧面板** 的 **Extensions** 标签页中
-- 搜索 "ST Manager" 或在扩展列表中找到
-- 点击启用后即可使用所有功能
+控制台会显示：
+```
+[ST Manager] ✅ 前端扩展已自动安装/更新 (3 个文件)
+[ST Manager] 请在酒馆 UI 的 Extensions 面板中启用 ST Manager
+```
+
+### 5. 在酒馆中启用
+
+打开 SillyTavern Web 界面：
+1. 右侧面板 → **Extensions** 标签页
+2. 找到 **"ST Manager"** 
+3. 点击启用即可使用
+
+---
+
+### 📝 前端手动安装（备选方案）
+
+如果自动安装失败，可以手动复制：
+```bash
+# 确保已构建前端
+cd ST-Manager-serverplugin/client
+npm run build
+
+# 手动复制到扩展目录
+cp -r dist/* ../../public/scripts/extensions/ST-Manager/
+```
 
 ## 📁 目录结构
 

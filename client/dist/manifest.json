@@ -1,0 +1,12 @@
+{
+  "display_name": "ST Manager",
+  "loading_order": 100,
+  "requires": [],
+  "optional": [],
+  "js": "index.iife.js",
+  "css": "style.css",
+  "author": "ST-Manager Team",
+  "version": "2.0.0",
+  "homePage": "https://github.com/Youzini-afk/ST-Manager-serverplugin",
+  "auto_update": false
+}
