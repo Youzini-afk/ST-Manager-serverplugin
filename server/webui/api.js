@@ -14,6 +14,8 @@ const { execSync, exec } = require('child_process');
 let cards, worldInfo, presets, extensions, automation, backup, config, regex, resources;
 // 导入正则工具
 const regexUtils = require('../utils/regex');
+// 导入 ST 客户端
+const { STClient, getStClient, refreshStClient } = require('../services/st_client');
 
 // ============ ST 本地路径探测/校验 ============
 
@@ -428,21 +430,59 @@ function registerRoutes(app, staticDir) {
         }
     });
 
-    // 获取角色卡详情
+    // 获取角色卡详情 - 复刻 Python 后端格式
     app.post('/api/get_card_detail', (req, res) => {
         try {
-            const { id, ...options } = req.body || {};
-            const card = cards.getCard(id, options);
-            if (card) {
-                res.json({
-                    success: true,
-                    card: card,
-                    ui_data: card.uiData || {},
-                });
-            } else {
-                res.json({ success: false, error: '卡片不存在' });
+            const { id, preview_wi, force_full_wi, wi_preview_limit, wi_preview_entry_max_chars } = req.body || {};
+            const rawCard = cards.getCard(id);
+
+            if (!rawCard) {
+                return res.json({ success: false, error: '卡片不存在' });
             }
+
+            // 解析数据块 - 兼容 V2/V3 格式
+            const cardData = rawCard.data || {};
+            const dataBlock = cardData.data || cardData;
+            const extensions = dataBlock.extensions || {};
+
+            // 构造扁平化的卡片对象 (匹配 Python 后端格式)
+            const card = {
+                id: id,
+                filename: path.basename(id),
+                char_name: dataBlock.name || '',
+                description: dataBlock.description || '',
+                first_mes: dataBlock.first_mes || '',
+                alternate_greetings: dataBlock.alternate_greetings || [],
+                mes_example: dataBlock.mes_example || '',
+                creator_notes: dataBlock.creator_notes || '',
+                personality: dataBlock.personality || '',
+                scenario: dataBlock.scenario || '',
+                system_prompt: dataBlock.system_prompt || '',
+                post_history_instructions: dataBlock.post_history_instructions || '',
+                character_book: dataBlock.character_book || null,
+                extensions: extensions,
+                tags: dataBlock.tags || [],
+                category: id.includes('/') ? id.substring(0, id.lastIndexOf('/')) : '',
+                creator: dataBlock.creator || '',
+                char_version: dataBlock.character_version || '',
+                image_url: `/api/thumbnail/${encodeURIComponent(id)}`,
+                thumb_url: `/api/thumbnail/${encodeURIComponent(id)}`,
+            };
+
+            // UI 数据
+            const uiData = config ? config.loadUiData() : {};
+            const uiInfo = uiData[id] || {};
+            card.ui_summary = uiInfo.summary || '';
+            card.source_link = uiInfo.link || '';
+            card.resource_folder = uiInfo.resource_folder || '';
+
+            res.json({
+                success: true,
+                card: card,
+                ui_data: uiInfo,
+            });
         } catch (e) {
+            console.error('[ST Manager] get_card_detail 错误:', e);
             res.json({ success: false, error: e.message });
         }
     });
@@ -744,25 +784,106 @@ function registerRoutes(app, staticDir) {
         }
     });
 
-    // 获取世界书详情
+    // 获取世界书详情 - 复刻 Python 后端逻辑
     app.post('/api/world_info/detail', (req, res) => {
         try {
             const { id, source_type, file_path, preview_limit, force_full } = req.body || {};
             console.log('[ST Manager] world_info/detail 请求:', { id, source_type, file_path });
 
-            const wb = worldInfo.getWorldbook(id || file_path);
-            console.log('[ST Manager] getWorldbook 结果:', wb ? `找到 (entries: ${wb.data?.entries ? Object.keys(wb.data.entries).length : 0})` : '未找到');
-
-            if (wb) {
-                // 前端期望 data 是世界书的原始 JSON 内容，不是包装对象
-                console.log('[ST Manager] 返回世界书数据, entries类型:', typeof wb.data?.entries, Array.isArray(wb.data?.entries) ? 'array' : 'object');
-                res.json({ success: true, data: wb.data });
-            } else {
-                res.json({ success: false, error: '世界书不存在' });
+            if (!file_path && !id) {
+                return res.json({ success: false, msg: '文件路径为空' });
             }
+
+            // 获取基础目录
+            const pluginDataDir = config ? config.getPluginDataDir() : path.join(__dirname, '..', '..', 'data');
+            const libraryRoot = path.join(pluginDataDir, 'library');
+
+            // 解析文件路径
+            let fullPath = file_path;
+            if (file_path && !path.isAbsolute(file_path)) {
+                // 相对路径，基于 library 目录
+                fullPath = path.join(libraryRoot, file_path);
+            } else if (id && !file_path) {
+                // 使用 id 解析（兼容旧逻辑）
+                const wb = worldInfo.getWorldbook(id);
+                if (wb) {
+                    return res.json({ success: true, data: wb.data });
+                }
+                return res.json({ success: false, msg: '世界书不存在' });
+            }
+
+            fullPath = path.normalize(fullPath);
+            console.log('[ST Manager] 解析后的路径:', fullPath);
+
+            if (!fs.existsSync(fullPath)) {
+                console.log('[ST Manager] 文件不存在:', fullPath);
+                return res.json({ success: false, msg: '文件不存在' });
+            }
+
+            // 直接读取文件
+            const content = fs.readFileSync(fullPath, 'utf-8');
+            let data = JSON.parse(content);
+
+            // 预览模式处理（条目过多时截断）
+            let truncated = false;
+            let truncatedContent = false;
+            let totalEntries = 0;
+            let appliedLimit = 0;
+
+            const countEntries = (raw) => {
+                if (Array.isArray(raw)) return raw.length;
+                if (raw && typeof raw === 'object') {
+                    const entries = raw.entries;
+                    if (Array.isArray(entries)) return entries.length;
+                    if (entries && typeof entries === 'object') return Object.keys(entries).length;
+                }
+                return 0;
+            };
+
+            const sliceEntries = (raw, limit) => {
+                if (Array.isArray(raw)) return raw.slice(0, limit);
+                if (raw && typeof raw === 'object') {
+                    const entries = raw.entries;
+                    if (Array.isArray(entries)) {
+                        return { ...raw, entries: entries.slice(0, limit) };
+                    }
+                    if (entries && typeof entries === 'object') {
+                        const keys = Object.keys(entries);
+                        try { keys.sort((a, b) => parseInt(a) - parseInt(b)); } catch (e) { keys.sort(); }
+                        const trimmed = {};
+                        keys.slice(0, limit).forEach(k => trimmed[k] = entries[k]);
+                        return { ...raw, entries: trimmed };
+                    }
+                }
+                return raw;
+            };
+
+            // 应用预览限制
+            const limitVal = parseInt(preview_limit) || 300;
+            if (!force_full && limitVal > 0) {
+                totalEntries = countEntries(data);
+                if (totalEntries > limitVal) {
+                    data = sliceEntries(data, limitVal);
+                    truncated = true;
+                    appliedLimit = limitVal;
+                }
+            }
+
+            console.log('[ST Manager] 返回世界书数据, entries数量:', countEntries(data));
+
+            const resp = { success: true, data };
+            if (truncated) {
+                resp.truncated = true;
+                resp.total_entries = totalEntries;
+                resp.preview_limit = appliedLimit;
+            }
+            if (truncatedContent) {
+                resp.truncated_content = true;
+            }
+            res.json(resp);
         } catch (e) {
             console.error('[ST Manager] world_info/detail 错误:', e);
-            res.json({ success: false, error: e.message });
+            res.json({ success: false, msg: e.message });
         }
     });
 
@@ -917,42 +1038,26 @@ function registerRoutes(app, staticDir) {
 
     // ============ SillyTavern 本地目录探测/验证 ============
 
-    // 自动探测 SillyTavern 安装路径
+    // 自动探测 SillyTavern 安装路径 (使用 STClient)
     app.get('/api/st/detect_path', (req, res) => {
         try {
-            const cfg = config ? config.getConfig() : {};
-            const candidates = [];
-            if (cfg && cfg.st_data_dir) candidates.push(cfg.st_data_dir);
-            if (config && config.getStRoot) candidates.push(config.getStRoot());
-            candidates.push(process.cwd());
+            const client = new STClient();
+            const detected = client.detectStPath();
 
-            const username = process.env.USERNAME || process.env.USER || '';
-            const common = [
-                'D:\\\\SillyTavern',
-                'E:\\\\SillyTavern',
-                'C:\\\\SillyTavern',
-                'D:\\\\Programs\\\\SillyTavern',
-                'E:\\\\Programs\\\\SillyTavern',
-                `C:\\\\Users\\\\${username}\\\\SillyTavern`,
-                '/opt/SillyTavern',
-                '~/SillyTavern',
-                `/home/${username}/SillyTavern`,
-            ];
-            candidates.push(...common);
-
-            let found = null;
-            for (const raw of candidates) {
-                if (!raw) continue;
-                const normalized = _normalizeInputPath(raw);
-                if (!normalized) continue;
-                if (_validateStPath(normalized)) {
-                    found = _normalizeStRoot(normalized);
-                    break;
+            if (detected) {
+                // 收集资源信息
+                const resources = {};
+                const connection = client.testConnection();
+                if (connection.local.resources) {
+                    Object.assign(resources, connection.local.resources);
                 }
-            }
 
-            if (found) {
-                res.json({ success: true, path: found, valid: true });
+                res.json({
+                    success: true,
+                    path: detected,
+                    valid: true,
+                    resources: resources
+                });
             } else {
                 res.json({
                     success: true,
@@ -966,33 +1071,29 @@ function registerRoutes(app, staticDir) {
         }
     });
 
-    // 验证指定路径是否有效
+    // 验证指定路径是否有效 (使用 STClient)
     app.post('/api/st/validate_path', (req, res) => {
         try {
             const rawPath = (req.body || {}).path;
-            const normalizedInput = _normalizeInputPath(rawPath);
-            if (!normalizedInput) {
+            if (!rawPath) {
                 return res.status(400).json({ success: false, error: '请提供路径' });
             }
 
-            const isValid = _validateStPath(normalizedInput);
-            let normalizedRoot = isValid ? _normalizeStRoot(normalizedInput) : normalizedInput;
-            if (normalizedRoot && !fs.existsSync(normalizedRoot)) {
-                normalizedRoot = normalizedInput;
-            }
+            const client = new STClient({ stDataDir: rawPath });
+            const isValid = client._validateStPath(rawPath);
 
             let resourcesInfo = {};
             if (isValid) {
-                const userDir = config && config.resolveUserDataDir
-                    ? config.resolveUserDataDir(normalizedRoot)
-                    : null;
-                resourcesInfo = _collectStResources(userDir);
+                const connection = client.testConnection();
+                if (connection.local.resources) {
+                    resourcesInfo = connection.local.resources;
+                }
             }
 
             res.json({
                 success: true,
                 valid: isValid,
-                normalized_path: normalizedRoot,
+                normalized_path: path.normalize(rawPath),
                 resources: resourcesInfo,
             });
         } catch (e) {
@@ -1000,10 +1101,10 @@ function registerRoutes(app, staticDir) {
         }
     });
 
-    // 资源同步 - 从 SillyTavern 复制资源到本地
+    // 资源同步 - 从 SillyTavern 复制资源到本地 (使用 STClient 复刻 Python 后端)
     app.post('/api/st/sync', (req, res) => {
         try {
-            const { resource_type, st_data_dir } = req.body || {};
+            const { resource_type, resource_ids, use_api, st_data_dir } = req.body || {};
 
             if (!resource_type) {
                 return res.status(400).json({
@@ -1013,43 +1114,22 @@ function registerRoutes(app, staticDir) {
                 });
             }
 
-            // 解析源目录（当前 ST 的用户数据目录）
-            // 如果用户指定了 st_data_dir，优先使用它，否则使用当前 ST 的数据目录
-            let srcUserDir = null;
-            if (st_data_dir) {
-                srcUserDir = config && config.resolveUserDataDir
-                    ? config.resolveUserDataDir(st_data_dir)
-                    : null;
-            }
-            if (!srcUserDir) {
-                srcUserDir = config ? config.getDataRoot() : null;
-            }
+            // 创建 STClient 实例
+            const stPath = st_data_dir || (config ? config.getDataRoot() : null);
+            const client = new STClient({ stDataDir: stPath });
 
-            if (!srcUserDir || !fs.existsSync(srcUserDir)) {
-                return res.json({
-                    success: false,
-                    error: '无法找到 SillyTavern 数据目录',
-                    result: { success: 0, failed: 0 }
-                });
-            }
-
-            // 获取目标目录（插件的私有存储目录 data/library）
+            // 获取目标目录 (复刻 Python 的配置映射)
             const pluginDataDir = config ? config.getPluginDataDir() : path.join(__dirname, '..', '..', 'data');
-
-            // 资源目录映射：ST目录 → 插件存储目录
-            const resourceDirMap = {
-                'characters': { src: 'characters', dest: 'library/characters', exts: ['.png', '.json'] },
-                'worlds': { src: 'worlds', dest: 'library/lorebooks', exts: ['.json'] },
-                'presets': { src: 'OpenAI Settings', dest: 'library/presets/OpenAI Settings', exts: ['.json'] },
-                'presets_textgen': { src: 'TextGen Settings', dest: 'library/presets/TextGen Settings', exts: ['.json'] },
-                'presets_novel': { src: 'NovelAI Settings', dest: 'library/presets/NovelAI Settings', exts: ['.json'] },
-                'presets_kobold': { src: 'KoboldAI Settings', dest: 'library/presets/KoboldAI Settings', exts: ['.json'] },
-                'regex': { src: 'scripts/extensions/regex', dest: 'library/extensions/regex', exts: ['.json'] },
-                'quick_replies': { src: 'scripts/extensions/quick-replies', dest: 'library/extensions/quick-replies', exts: ['.json'] }
+            const targetDirMap = {
+                'characters': path.join(pluginDataDir, 'library', 'characters'),
+                'worlds': path.join(pluginDataDir, 'library', 'lorebooks'),
+                'presets': path.join(pluginDataDir, 'library', 'presets', 'OpenAI Settings'),
+                'regex': path.join(pluginDataDir, 'library', 'extensions', 'regex'),
+                'quick_replies': path.join(pluginDataDir, 'library', 'extensions', 'quick-replies'),
             };
 
-            const mapping = resourceDirMap[resource_type];
-            if (!mapping) {
+            const targetDir = targetDirMap[resource_type];
+            if (!targetDir) {
                 return res.json({
                     success: false,
                     error: `未知资源类型: ${resource_type}`,
@@ -1057,107 +1137,53 @@ function registerRoutes(app, staticDir) {
                 });
             }
 
-            // 源：ST 原始数据目录
-            const srcDir = path.join(srcUserDir, mapping.src);
-            // 目标：插件私有存储目录
-            const destDir = path.join(pluginDataDir, mapping.dest);
-
             // 确保目标目录存在
-            if (!fs.existsSync(destDir)) {
-                fs.mkdirSync(destDir, { recursive: true });
+            if (!fs.existsSync(targetDir)) {
+                fs.mkdirSync(targetDir, { recursive: true });
             }
 
-            let successCount = 0;
-            let failedCount = 0;
-            const errors = [];
-
-            // 调试日志
-            console.log('[ST Manager] 同步调试信息:');
-            console.log('  - 资源类型:', resource_type);
-            console.log('  - 源用户目录:', srcUserDir);
-            console.log('  - 插件数据目录:', pluginDataDir);
-            console.log('  - 源目录:', srcDir);
-            console.log('  - 目标目录:', destDir);
-
-            // 检查源目录是否存在
-            if (!fs.existsSync(srcDir)) {
-                console.log('  - 源目录不存在!');
-                return res.json({
-                    success: true,
-                    result: { success: 0, failed: 0, skipped: 0 },
-                    message: `源目录不存在: ${srcDir}`
-                });
+            let result;
+            if (resource_ids && resource_ids.length > 0) {
+                // 同步指定资源
+                result = {
+                    success: 0,
+                    failed: 0,
+                    skipped: 0,
+                    errors: [],
+                    synced: []
+                };
+                for (const resId of resource_ids) {
+                    const syncResult = client.syncResource(resource_type, resId, targetDir, use_api);
+                    if (syncResult.success) {
+                        result.success++;
+                        result.synced.push(resId);
+                    } else {
+                        result.failed++;
+                        result.errors.push(`${resId}: ${syncResult.msg}`);
+                    }
+                }
+            } else {
+                // 同步全部
+                result = client.syncAllResources(resource_type, targetDir, use_api);
             }
 
-            // 读取并复制文件
-            try {
-                const files = fs.readdirSync(srcDir);
-                console.log('  - 源目录文件数量:', files.length);
-                if (files.length > 0) {
-                    console.log('  - 前5个文件:', files.slice(0, 5).join(', '));
-                    console.log('  - 允许的扩展名:', mapping.exts.join(', '));
-                }
-
-                let skippedCount = 0;
-
-                for (const file of files) {
-                    const ext = path.extname(file).toLowerCase();
-                    if (!mapping.exts.includes(ext)) continue;
-
-                    const srcPath = path.join(srcDir, file);
-                    const destPath = path.join(destDir, file);
-
-                    try {
-                        // 检查是否是文件
-                        const stat = fs.statSync(srcPath);
-                        if (!stat.isFile()) continue;
-
-                        // 检查目标文件是否已存在且更新
-                        let needsCopy = true;
-                        if (fs.existsSync(destPath)) {
-                            const destStat = fs.statSync(destPath);
-                            // 如果目标文件较新或相同大小，跳过
-                            if (destStat.mtimeMs >= stat.mtimeMs && destStat.size === stat.size) {
-                                needsCopy = false;
-                                skippedCount++;
-                            }
-                        }
-
-                        if (needsCopy) {
-                            fs.copyFileSync(srcPath, destPath);
-                            successCount++;
-                            console.log(`  - 复制: ${file}`);
-                        }
-                    } catch (copyErr) {
-                        failedCount++;
-                        errors.push(`${file}: ${copyErr.message}`);
-                        console.log(`  - 失败: ${file} - ${copyErr.message}`);
+            // 正则同步：补充全局正则（settings.json）
+            if (resource_type === 'regex') {
+                const settingsPath = client.getSettingsPath();
+                if (settingsPath) {
+                    const globalResult = regexUtils.exportGlobalRegex(settingsPath, targetDir);
+                    result.global_regex = globalResult;
+                    if (globalResult.success) {
+                        result.success += globalResult.success;
+                    }
+                    if (globalResult.failed) {
+                        result.failed += globalResult.failed;
                     }
                 }
-
-                console.log(`  - 结果: 成功=${successCount}, 跳过=${skippedCount}, 失败=${failedCount}`);
-
-                // 对于正则类型，使用专门的工具函数从 settings.json 导出全局正则
-                if (resource_type === 'regex') {
-                    const settingsPath = path.join(srcUserDir, 'settings.json');
-                    const globalResult = regexUtils.exportGlobalRegex(settingsPath, destDir);
-                    successCount += globalResult.success;
-                    failedCount += globalResult.failed;
-                    if (globalResult.files && globalResult.files.length > 0) {
-                        console.log(`[ST Manager] 导出全局正则: ${globalResult.files.join(', ')}`);
-                    }
-                }
-
-            } catch (readErr) {
-                return res.json({
-                    success: false,
-                    error: `读取目录失败: ${readErr.message}`,
-                    result: { success: 0, failed: 0 }
-                });
             }
 
             // 触发资源刷新
-            if (successCount > 0 && resources && resources.rescan) {
+            if (result.success > 0 && resources && resources.rescan) {
                 try {
                     resources.rescan();
                 } catch (e) {
@@ -1167,11 +1193,9 @@ function registerRoutes(app, staticDir) {
 
             res.json({
                 success: true,
-                result: {
-                    success: successCount,
-                    failed: failedCount,
-                    errors: errors.length > 0 ? errors : undefined
-                }
+                resource_type: resource_type,
+                target_dir: targetDir,
+                result: result
             });
 
         } catch (e) {
