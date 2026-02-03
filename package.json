@@ -1,0 +1,19 @@
+{
+  "name": "st-manager",
+  "version": "1.0.0",
+  "description": "ST Manager - SillyTavern 资源管理与自动化工具",
+  "main": "server/index.js",
+  "author": "Youzini-afk",
+  "license": "MIT",
+  "keywords": [
+    "sillytavern",
+    "plugin",
+    "backup",
+    "manager",
+    "automation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Youzini-afk/st-manager"
+  }
+}
