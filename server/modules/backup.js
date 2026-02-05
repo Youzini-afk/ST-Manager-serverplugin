@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const { resolveInside } = require('../utils/safePath');
 
 // 备份计划状态
 let scheduleTimer = null;
@@ -17,6 +18,27 @@ let scheduleConfig = {
     dayOfWeek: 0,
     retentionDays: 30,
 };
+
+function resolveBackupRoot(customPath = '') {
+    const defaultRoot = path.resolve(config.getBackupRoot());
+    if (!customPath || typeof customPath !== 'string') {
+        return defaultRoot;
+    }
+    const resolved = path.resolve(customPath);
+    const rootCmp = process.platform === 'win32' ? defaultRoot.toLowerCase() : defaultRoot;
+    const resolvedCmp = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+    // 仅允许写入默认备份目录及其子目录
+    if (resolvedCmp === rootCmp || resolvedCmp.startsWith(rootCmp + path.sep)) {
+        return resolved;
+    }
+    return defaultRoot;
+}
+
+function resolveBackupDirById(backupRoot, backupId) {
+    if (!backupId || typeof backupId !== 'string') return null;
+    if (backupId.includes('..') || backupId.includes('/') || backupId.includes('\\')) return null;
+    return resolveInside(backupRoot, backupId);
+}
 
 /**
  * 确保目录存在
@@ -62,7 +84,7 @@ function trigger(options = {}) {
     const { resources, path: customPath, incremental } = options;
     const dataRoot = config.getDataRoot();
     const resourceDirs = config.getResourceDirs();
-    const backupRoot = customPath || config.getBackupRoot();
+    const backupRoot = resolveBackupRoot(customPath);
     
     // 生成时间戳
     const now = new Date();
@@ -187,10 +209,10 @@ function restore(backupId) {
         return { success: false, message: '缺少 backupId 参数' };
     }
     
-    const backupRoot = config.getBackupRoot();
-    const backupDir = path.join(backupRoot, backupId);
+    const backupRoot = resolveBackupRoot();
+    const backupDir = resolveBackupDirById(backupRoot, backupId);
     
-    if (!fs.existsSync(backupDir)) {
+    if (!backupDir || !fs.existsSync(backupDir)) {
         return { success: false, message: `备份不存在: ${backupId}` };
     }
     
@@ -248,9 +270,9 @@ function remove(backupId) {
         return { success: false, message: '缺少 backupId 参数' };
     }
     
-    const backupDir = path.join(config.getBackupRoot(), backupId);
+    const backupDir = resolveBackupDirById(resolveBackupRoot(), backupId);
     
-    if (!fs.existsSync(backupDir)) {
+    if (!backupDir || !fs.existsSync(backupDir)) {
         return { success: false, message: `备份不存在: ${backupId}` };
     }
     

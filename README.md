@@ -22,6 +22,22 @@ SillyTavern 资源管理与自动化工具 - 完整集成插件
 - **规则预览** - 执行前预览匹配结果
 - **规则集管理** - 保存和复用规则集
 
+## 🆕 最近更新（对齐 ST-Manager）
+
+### 关键修复
+- **自动化执行修复**：`/api/automation/execute` 不再只做预览，现可真实执行移动、标签增删、收藏状态更新。
+- **自动化筛选修复**：支持按 `category + recursive` 批量执行规则，和 WebUI 的文件夹执行模式一致。
+- **配置兼容修复**：统一并补齐默认配置字段（分页、快照、认证、资源白名单、自动化全局规则等），兼容旧版 `config.json` 结构。
+- **路径权限修复**：读取接口可识别 `allowed_abs_resource_roots`，可访问白名单中的绝对资源路径。
+
+### 新增接口
+- `POST /api/presets/save`：保存/更新预设内容。
+- `POST /api/export_worldbook_single`：从角色卡导出单独世界书 JSON。
+
+### WebUI 对齐增强
+- 完成/增强了多项 ST-Manager WebUI API 兼容端点（含备份快照、预设、扩展、世界书剪贴板、批量上传等）。
+- `automation` 返回结构兼容前端字段（`items/data/ruleset_id` 等常用格式）。
+
 ## 📦 安装
 
 ### 方式 A：作为 SillyTavern 插件（推荐）
@@ -151,7 +167,9 @@ SillyTavern/plugins/ST-Manager-serverplugin/data/
 ```
 
 说明：
-- 插件数据不写入酒馆原始资源目录，避免误改。
+- 默认工作流是先在插件私有库 `data/library` 管理资源。
+- 资源目录支持绑定绝对路径；在白名单与接口允许范围内，可操作酒馆本体资源目录（用于“保存到酒馆”等场景）。
+- ST 资源同步仍以插件库为落点；“写回酒馆本体目录”主要通过资源目录绑定与保存类接口实现。
 - 旧数据目录 `SillyTavern/data/plugins/st-manager` 会在首次启动时自动迁移（配置与 UI 数据）。
 
 ## 🔄 同步机制

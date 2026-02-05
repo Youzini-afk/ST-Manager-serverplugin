@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const regex = require('./regex');
+const { resolveInside } = require('../utils/safePath');
 
 /**
  * 预设类型定义
@@ -196,11 +197,12 @@ function getPreset(presetId) {
     if (parts.length < 2) return null;
 
     const presetType = parts[0];
+    if (!PRESET_DIRS[presetType]) return null;
     const filename = parts.slice(1).join('::');
     const dir = getPresetDir(presetType);
-    const fullPath = path.join(dir, filename);
+    const fullPath = resolveInside(dir, filename);
 
-    if (!fs.existsSync(fullPath)) return null;
+    if (!fullPath || !fs.existsSync(fullPath)) return null;
 
     try {
         const stat = fs.statSync(fullPath);

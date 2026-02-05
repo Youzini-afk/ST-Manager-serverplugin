@@ -228,6 +228,16 @@ class BackendService {
    * 获取角色卡列表
    */
   async listCards(page: number = 1, pageSize: number = 100): Promise<any> {
+    if (this.useServerPlugin) {
+      const result = await this.request<any>(`/cards/list?page=${page}&pageSize=${pageSize}`);
+      return {
+        ...result,
+        cards: (result.items || []).map((item: any) => ({
+          ...item,
+          char_name: item.char_name || item.name || item.filename,
+        })),
+      };
+    }
     return this.request(`/api/list_cards?page=${page}&page_size=${pageSize}&recursive=true`);
   }
 
@@ -235,6 +245,9 @@ class BackendService {
    * 获取世界书列表
    */
   async listWorldbooks(): Promise<any> {
+    if (this.useServerPlugin) {
+      return this.request('/worldbooks/list');
+    }
     return this.request('/api/world_info/list');
   }
 
@@ -242,6 +255,9 @@ class BackendService {
    * 获取预设列表
    */
   async listPresets(): Promise<any> {
+    if (this.useServerPlugin) {
+      return this.request('/presets/list');
+    }
     return this.request('/api/presets/list');
   }
 
@@ -249,6 +265,9 @@ class BackendService {
    * 获取正则脚本列表
    */
   async listRegexScripts(): Promise<any> {
+    if (this.useServerPlugin) {
+      return this.request('/regex/list');
+    }
     return this.request('/api/v2/regex/list');
   }
 

@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const resources = require('./resources');
+const { resolveInside } = require('../utils/safePath');
 
 // 操作符定义
 const OPERATORS = {
@@ -70,6 +71,14 @@ function sanitizeFilename(name) {
         .trim() || 'Untitled';
 }
 
+function resolveRulesetPath(rulesetId) {
+    if (!rulesetId || typeof rulesetId !== 'string') return null;
+    if (rulesetId.includes('..') || rulesetId.includes('/') || rulesetId.includes('\\')) return null;
+    const safeId = sanitizeFilename(rulesetId);
+    if (!safeId) return null;
+    return resolveInside(getRulesDir(), `${safeId}.json`);
+}
+
 /**
  * 获取规则集目录
  */
@@ -118,12 +127,12 @@ function listRulesets() {
  * 获取规则集
  */
 function getRuleset(rulesetId) {
-    const filePath = path.join(getRulesDir(), `${rulesetId}.json`);
+    const filePath = resolveRulesetPath(rulesetId);
     
-    if (!fs.existsSync(filePath)) return null;
+    if (!filePath || !fs.existsSync(filePath)) return null;
     
     const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    data.id = rulesetId;
+    data.id = sanitizeFilename(rulesetId);
     return data;
 }
 
@@ -154,8 +163,8 @@ function saveRuleset(data) {
     
     // 如果改名，删除旧文件
     if (oldId && oldId !== newId) {
-        const oldPath = path.join(rulesDir, `${oldId}.json`);
-        if (fs.existsSync(oldPath)) {
+        const oldPath = resolveRulesetPath(oldId);
+        if (oldPath && fs.existsSync(oldPath)) {
             fs.unlinkSync(oldPath);
         }
     }
@@ -177,9 +186,9 @@ function saveRuleset(data) {
  * 删除规则集
  */
 function deleteRuleset(rulesetId) {
-    const filePath = path.join(getRulesDir(), `${rulesetId}.json`);
+    const filePath = resolveRulesetPath(rulesetId);
     
-    if (!fs.existsSync(filePath)) {
+    if (!filePath || !fs.existsSync(filePath)) {
         return { success: false, error: '规则集不存在' };
     }
     
@@ -460,14 +469,25 @@ function preview(rulesetId, cardIds = null) {
     if (!ruleset) {
         return { success: false, error: '规则集不存在' };
     }
-    
-    const cards = cardIds 
-        ? cardIds.map(id => ({ id, data: resources.getCard(id) })).filter(c => c.data)
-        : resources.listCards().map(c => ({ id: c.id, data: resources.getCard(c.id) })).filter(c => c.data);
+
+    let targets = [];
+    if (Array.isArray(cardIds) && cardIds.length) {
+        targets = cardIds
+            .map(id => ({ id, data: resources.getCard(id) }))
+            .filter(item => item && item.data);
+    } else {
+        const listed = resources.listCards({ page: 1, pageSize: 999999, sort: 'mtime_desc' });
+        const items = Array.isArray(listed)
+            ? listed
+            : (Array.isArray(listed?.items) ? listed.items : []);
+        targets = items
+            .map(item => ({ id: item.id, data: resources.getCard(item.id) }))
+            .filter(item => item && item.data);
+    }
     
     const results = [];
     
-    for (const { id, data } of cards) {
+    for (const { id, data } of targets) {
         const plan = evaluate(data, ruleset);
         
         if (plan.actions.length > 0) {
@@ -482,9 +502,183 @@ function preview(rulesetId, cardIds = null) {
     return {
         success: true,
         matchCount: results.length,
-        totalCards: cards.length,
+        totalCards: targets.length,
         results,
     };
+}
+
+function _normalizeCardId(cardId) {
+    return String(cardId || '').replace(/\\/g, '/').trim();
+}
+
+function _resolveUiKey(uiData, cardId) {
+    const normalizedId = _normalizeCardId(cardId);
+    if (!normalizedId) return '';
+    if (uiData[normalizedId]) return normalizedId;
+
+    const ext = path.extname(normalizedId).toLowerCase();
+    if (ext === '.png') {
+        const alt = `${normalizedId.slice(0, -4)}.json`;
+        if (uiData[alt]) return alt;
+    } else if (ext === '.json') {
+        const alt = `${normalizedId.slice(0, -5)}.png`;
+        if (uiData[alt]) return alt;
+    }
+
+    const parent = path.posix.dirname(normalizedId);
+    if (parent && parent !== '.' && uiData[parent]) {
+        return parent;
+    }
+    return normalizedId;
+}
+
+function _migrateUiEntry(uiData, oldId, newId) {
+    const oldKey = _resolveUiKey(uiData, oldId);
+    const newKey = _resolveUiKey(uiData, newId);
+    if (!oldKey || !uiData[oldKey]) return false;
+    if (oldKey === newKey) return false;
+    if (!uiData[newKey] || typeof uiData[newKey] !== 'object') {
+        uiData[newKey] = {};
+    }
+    uiData[newKey] = { ...uiData[oldKey], ...uiData[newKey] };
+    delete uiData[oldKey];
+    return true;
+}
+
+function _parseBoolValue(input) {
+    const str = String(input || '').trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(str)) return true;
+    if (['false', '0', 'no', 'off'].includes(str)) return false;
+    return null;
+}
+
+function _splitTags(rawValue) {
+    return String(rawValue || '')
+        .split('|')
+        .map(tag => tag.trim())
+        .filter(Boolean);
+}
+
+function _applyTagChanges(cardId, addTagsSet, removeTagsSet) {
+    const card = resources.cards && resources.cards.getCard ? resources.cards.getCard(cardId) : null;
+    if (!card || !card.path || !card.path.toLowerCase().endsWith('.json')) {
+        return { changed: false, skipped: true };
+    }
+
+    let payload;
+    try {
+        payload = JSON.parse(fs.readFileSync(card.path, 'utf-8'));
+    } catch (e) {
+        return { changed: false, skipped: true };
+    }
+
+    const dataBlock = (payload && payload.data && typeof payload.data === 'object')
+        ? payload.data
+        : payload;
+
+    const currentTags = Array.isArray(dataBlock.tags)
+        ? dataBlock.tags.map(t => String(t).trim()).filter(Boolean)
+        : [];
+    const tagSet = new Set(currentTags);
+    let changed = false;
+
+    for (const tag of addTagsSet) {
+        if (!tagSet.has(tag)) {
+            tagSet.add(tag);
+            changed = true;
+        }
+    }
+    for (const tag of removeTagsSet) {
+        if (tagSet.delete(tag)) {
+            changed = true;
+        }
+    }
+
+    if (!changed) {
+        return { changed: false, skipped: false };
+    }
+
+    dataBlock.tags = Array.from(tagSet);
+    fs.writeFileSync(card.path, JSON.stringify(payload, null, 2), 'utf-8');
+    return { changed: true, skipped: false };
+}
+
+function _applyFavorite(uiData, cardId, favorite) {
+    const key = _resolveUiKey(uiData, cardId);
+    if (!key) return false;
+    if (!uiData[key] || typeof uiData[key] !== 'object') {
+        uiData[key] = {};
+    }
+    if (uiData[key].favorite === favorite) return false;
+    uiData[key].favorite = favorite;
+    return true;
+}
+
+function _buildExecutionPlan(actions) {
+    const plan = {
+        move: null,
+        add_tags: new Set(),
+        remove_tags: new Set(),
+        favorite: null,
+    };
+
+    for (const action of actions || []) {
+        const type = String(action?.type || '').trim();
+        const value = action?.value;
+
+        if (type === ACTIONS.MOVE) {
+            plan.move = String(value || '').trim();
+        } else if (type === ACTIONS.ADD_TAG) {
+            for (const tag of _splitTags(value)) {
+                plan.add_tags.add(tag);
+            }
+        } else if (type === ACTIONS.REMOVE_TAG) {
+            for (const tag of _splitTags(value)) {
+                plan.remove_tags.add(tag);
+            }
+        } else if (type === ACTIONS.SET_FAV) {
+            plan.favorite = _parseBoolValue(value);
+        }
+    }
+
+    return plan;
+}
+
+function _moveCardWithFallback(cardId, targetFolder) {
+    const card = resources.cards && resources.cards.getCard ? resources.cards.getCard(cardId) : null;
+    if (!card || !card.path) {
+        return { success: false, error: '卡片不存在' };
+    }
+
+    try {
+        const charactersDir = path.join(config.getPluginDataDir(), 'library', 'characters');
+        const filename = path.basename(cardId);
+        const targetDir = targetFolder
+            ? resolveInside(charactersDir, targetFolder)
+            : charactersDir;
+        if (!targetDir) {
+            return { success: false, error: '无效目标路径' };
+        }
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+        const targetPath = path.join(targetDir, filename);
+        if (fs.existsSync(targetPath) && targetPath !== card.path) {
+            return { success: false, error: '目标位置已存在同名文件' };
+        }
+
+        try {
+            fs.renameSync(card.path, targetPath);
+        } catch (e) {
+            fs.copyFileSync(card.path, targetPath);
+            fs.unlinkSync(card.path);
+        }
+
+        const newId = path.relative(charactersDir, targetPath).replace(/\\/g, '/');
+        return { success: true, newId };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
 }
 
 /**
@@ -500,13 +694,79 @@ function execute(rulesetId, cardIds = null, dryRun = false) {
     if (dryRun) {
         return previewResult;
     }
-    
-    // TODO: 实际执行动作（移动文件夹、添加标签等）
-    // 这需要修改 PNG 元数据，暂时只返回预览结果
-    
+
+    const summary = {
+        moves: 0,
+        tag_changes: 0,
+        favorite_changes: 0,
+    };
+    const movesPlan = {};
+    const tagsPlan = { add: {}, remove: {} };
+    const details = [];
+
+    const uiData = config.loadUiData ? config.loadUiData() : {};
+    let uiChanged = false;
+
+    for (const item of previewResult.results) {
+        const originalId = _normalizeCardId(item.cardId);
+        if (!originalId) continue;
+
+        const executionPlan = _buildExecutionPlan(item.actions || []);
+        let currentId = originalId;
+
+        const tagResult = _applyTagChanges(currentId, executionPlan.add_tags, executionPlan.remove_tags);
+        if (tagResult.changed) {
+            summary.tag_changes += 1;
+        }
+        if (executionPlan.add_tags.size) {
+            tagsPlan.add[currentId] = Array.from(executionPlan.add_tags);
+        }
+        if (executionPlan.remove_tags.size) {
+            tagsPlan.remove[currentId] = Array.from(executionPlan.remove_tags);
+        }
+
+        if (executionPlan.favorite !== null) {
+            if (_applyFavorite(uiData, currentId, executionPlan.favorite)) {
+                uiChanged = true;
+                summary.favorite_changes += 1;
+            }
+        }
+
+        if (executionPlan.move !== null) {
+            const moveResult = _moveCardWithFallback(currentId, executionPlan.move);
+            if (moveResult.success && moveResult.newId) {
+                const newId = _normalizeCardId(moveResult.newId);
+                movesPlan[currentId] = newId;
+                summary.moves += 1;
+                if (_migrateUiEntry(uiData, currentId, newId)) {
+                    uiChanged = true;
+                }
+                currentId = newId;
+            }
+        }
+
+        details.push({
+            card_id: originalId,
+            final_id: currentId,
+            moved: currentId !== originalId,
+            tags_changed: tagResult.changed,
+            tags_skipped: tagResult.skipped,
+        });
+    }
+
+    if (uiChanged && config.saveUiData) {
+        config.saveUiData(uiData);
+    }
+
     return {
         success: true,
+        processed: previewResult.matchCount,
         executed: previewResult.matchCount,
+        total_cards: previewResult.totalCards,
+        summary,
+        moves_plan: movesPlan,
+        tags_plan: tagsPlan,
+        details,
         results: previewResult.results,
         message: '规则执行完成',
     };

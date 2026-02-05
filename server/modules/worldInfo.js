@@ -12,9 +12,26 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const config = require('./config');
+const { resolveInside } = require('../utils/safePath');
 
 // PNG 元数据提取 (复用)
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+
+function getLibraryRoot() {
+    return path.join(config.getPluginDataDir(), 'library');
+}
+
+function getLibraryCharactersDir() {
+    return path.join(getLibraryRoot(), 'characters');
+}
+
+function getLibraryLorebooksDir() {
+    return path.join(getLibraryRoot(), 'lorebooks');
+}
+
+function getLibraryResourcesDir() {
+    return path.join(getLibraryRoot(), 'resources');
+}
 
 /**
  * 从 PNG 文件提取角色卡数据
@@ -180,22 +197,16 @@ function countEntries(raw) {
 function listWorldbooks(wiType = 'all', search = '', page = 1, pageSize = 20) {
     const items = [];
 
-    // 从插件的 library 目录读取同步后的世界书
-    const pluginDataDir = config.getPluginDataDir();
-    const libraryRoot = path.join(pluginDataDir, 'library');
-
-    // Library 目录结构
-    const lorebooksDir = path.join(libraryRoot, 'lorebooks');
-    const charactersDir = path.join(libraryRoot, 'characters');
+    const libraryRoot = getLibraryRoot();
+    const lorebooksDir = getLibraryLorebooksDir();
+    const charactersDir = getLibraryCharactersDir();
+    const resourcesDir = getLibraryResourcesDir();
 
     const searchLower = (search || '').toLowerCase().trim();
 
     // 收集内嵌世界书名称和签名（用于全局去重）
     const embeddedNameSet = new Set();
     const embeddedSigSet = new Set();
-
-    // 收集资源目录（用于排除）
-    const resourceLoreDirs = new Set();
 
     // 1. 预扫描内嵌世界书（如果需要与全局去重）
     if (wiType === 'all' || wiType === 'global') {
@@ -211,11 +222,18 @@ function listWorldbooks(wiType = 'all', search = '', page = 1, pageSize = 20) {
     // 2. 扫描全局目录 (library/lorebooks)
     if (wiType === 'all' || wiType === 'global') {
         if (fs.existsSync(lorebooksDir)) {
-            scanGlobalWorldbooks(lorebooksDir, items, searchLower, embeddedNameSet, embeddedSigSet, resourceLoreDirs, libraryRoot);
+            scanGlobalWorldbooks(lorebooksDir, items, searchLower, embeddedNameSet, embeddedSigSet, libraryRoot);
         }
     }
 
-    // 3. 扫描内嵌世界书 (library/characters)
+    // 3. 扫描资源世界书 (library/resources/<folder>/lorebooks)
+    if (wiType === 'all' || wiType === 'resource') {
+        if (fs.existsSync(resourcesDir)) {
+            scanResourceWorldbooks(resourcesDir, 'lorebooks', items, searchLower, libraryRoot);
+        }
+    }
+
+    // 4. 扫描内嵌世界书 (library/characters)
     if (wiType === 'all' || wiType === 'embedded') {
         if (fs.existsSync(charactersDir)) {
             scanEmbeddedWorldbooksForList(charactersDir, items, searchLower);
@@ -284,24 +302,13 @@ function scanEmbeddedWorldbooks(charactersDir, nameSet, sigSet) {
 /**
  * 扫描全局世界书目录
  */
-function scanGlobalWorldbooks(globalDir, items, search, embeddedNameSet, embeddedSigSet, resourceLoreDirs, dataRoot) {
+function scanGlobalWorldbooks(globalDir, items, search, embeddedNameSet, embeddedSigSet, dataRoot) {
     const files = fs.readdirSync(globalDir);
 
     for (const file of files) {
         if (!file.toLowerCase().endsWith('.json')) continue;
 
         const fullPath = path.join(globalDir, file);
-
-        // 排除资源目录
-        const normalizedPath = path.normalize(fullPath);
-        let isInResourceDir = false;
-        for (const loreDir of resourceLoreDirs) {
-            if (normalizedPath.startsWith(loreDir)) {
-                isInResourceDir = true;
-                break;
-            }
-        }
-        if (isInResourceDir) continue;
 
         try {
             const stat = fs.statSync(fullPath);
@@ -462,6 +469,42 @@ function scanEmbeddedWorldbooksForList(charactersDir, items, search) {
     }
 }
 
+function normalizeWorldbookId(input) {
+    if (!input || typeof input !== 'string') return '';
+    const raw = input.trim().replace(/\\/g, '/');
+    if (!raw) return '';
+    if (raw.startsWith('global::') || raw.startsWith('resource::') || raw.startsWith('embedded::')) {
+        return raw;
+    }
+
+    if (raw.startsWith('lorebooks/')) {
+        const filename = raw.slice('lorebooks/'.length);
+        return filename ? `global::${filename}` : '';
+    }
+
+    if (raw.startsWith('resources/')) {
+        const parts = raw.split('/');
+        if (parts.length >= 4 && parts[2] === 'lorebooks') {
+            const folder = parts[1];
+            const filename = parts.slice(3).join('/');
+            if (folder && filename) {
+                return `resource::${folder}::${filename}`;
+            }
+        }
+    }
+
+    if (raw.startsWith('characters/')) {
+        const cardFile = raw.slice('characters/'.length);
+        return cardFile ? `embedded::${cardFile}` : '';
+    }
+
+    if (raw.toLowerCase().endsWith('.json')) {
+        return `global::${raw.split('/').pop()}`;
+    }
+
+    return '';
+}
+
 /**
  * 获取单个世界书详情
  * 
@@ -469,29 +512,24 @@ function scanEmbeddedWorldbooksForList(charactersDir, items, search) {
  * @returns {Object|null} 世界书数据
  */
 function getWorldbook(worldbookId) {
-    if (!worldbookId) return null;
+    const normalizedId = normalizeWorldbookId(worldbookId);
+    if (!normalizedId) return null;
 
-    // 从插件的 library 目录读取
-    const pluginDataDir = config.getPluginDataDir();
-    const libraryRoot = path.join(pluginDataDir, 'library');
-
-    // 保留用于 embedded 类型
-    const dataRoot = config.getDataRoot();
-    const resourceDirs = config.getResourceDirs();
-    const resourcesRoot = config.getResourcesRoot();
-    const resourceSubDirs = config.getResourceSubDirs();
-
-    const parts = worldbookId.split('::');
+    const libraryRoot = getLibraryRoot();
+    const lorebooksDir = getLibraryLorebooksDir();
+    const charactersDir = getLibraryCharactersDir();
+    const resourcesRoot = getLibraryResourcesDir();
+    const parts = normalizedId.split('::');
 
     if (parts[0] === 'global' && parts.length >= 2) {
         const filename = parts.slice(1).join('::');
-        const fullPath = path.join(libraryRoot, 'lorebooks', filename);
+        const fullPath = resolveInside(lorebooksDir, filename);
 
-        if (fs.existsSync(fullPath)) {
+        if (fullPath && fs.existsSync(fullPath)) {
             try {
                 const content = fs.readFileSync(fullPath, 'utf-8');
                 return {
-                    id: worldbookId,
+                    id: normalizedId,
                     filename,
                     type: 'global',
                     path: fullPath,
@@ -504,13 +542,13 @@ function getWorldbook(worldbookId) {
     } else if (parts[0] === 'resource' && parts.length >= 3) {
         const folder = parts[1];
         const filename = parts.slice(2).join('::');
-        const fullPath = path.join(resourcesRoot, folder, resourceSubDirs.lorebooks, filename);
+        const fullPath = resolveInside(resourcesRoot, path.join(folder, 'lorebooks', filename));
 
-        if (fs.existsSync(fullPath)) {
+        if (fullPath && fs.existsSync(fullPath)) {
             try {
                 const content = fs.readFileSync(fullPath, 'utf-8');
                 return {
-                    id: worldbookId,
+                    id: normalizedId,
                     filename,
                     type: 'resource',
                     sourceFolder: folder,
@@ -523,9 +561,9 @@ function getWorldbook(worldbookId) {
         }
     } else if (parts[0] === 'embedded' && parts.length >= 2) {
         const cardFile = parts.slice(1).join('::');
-        const fullPath = path.join(libraryRoot, 'characters', cardFile);
+        const fullPath = resolveInside(charactersDir, cardFile);
 
-        if (fs.existsSync(fullPath)) {
+        if (fullPath && fs.existsSync(fullPath)) {
             try {
                 let cardData = null;
                 if (cardFile.toLowerCase().endsWith('.png')) {
@@ -539,7 +577,7 @@ function getWorldbook(worldbookId) {
                     const book = data.character_book;
                     if (book) {
                         return {
-                            id: worldbookId,
+                            id: normalizedId,
                             cardFile,
                             type: 'embedded',
                             cardName: data.name,

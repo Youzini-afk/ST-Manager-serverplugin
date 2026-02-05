@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const { resolveInside } = require('../utils/safePath');
 
 // PNG 元数据提取
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
@@ -130,37 +131,16 @@ function scanCardsRecursive(dir, baseDir, items, depth = 0) {
 function listCards(options = {}) {
     const { search = '', folder = '', page = 1, pageSize = 50, sort = 'mtime_desc' } = options;
 
-    // 从插件的 library 目录读取同步后的角色卡
-    const pluginDataDir = config.getPluginDataDir();
-    const charactersDir = path.join(pluginDataDir, 'library', 'characters');
-
-    console.log('[ST Manager] listCards 调试:');
-    console.log('  - pluginDataDir:', pluginDataDir);
-    console.log('  - charactersDir:', charactersDir);
-    console.log('  - 目录存在:', fs.existsSync(charactersDir));
+    const charactersDir = path.join(config.getPluginDataDir(), 'library', 'characters');
 
     const items = [];
 
     if (!fs.existsSync(charactersDir)) {
-        console.log('[ST Manager] 角色卡目录不存在:', charactersDir);
         return { success: true, items: [], total: 0, page, pageSize };
-    }
-
-    // 读取目录内容
-    try {
-        const files = fs.readdirSync(charactersDir);
-        console.log('  - 目录文件数量:', files.length);
-        if (files.length > 0) {
-            console.log('  - 前5个文件:', files.slice(0, 5).join(', '));
-        }
-    } catch (e) {
-        console.log('  - 读取目录错误:', e.message);
     }
 
     // 递归扫描
     scanCardsRecursive(charactersDir, charactersDir, items);
-
-    console.log('  - 扫描到的角色卡数量:', items.length);
 
     // 过滤
     let filtered = items;
@@ -214,16 +194,17 @@ function listCards(options = {}) {
 function getCard(cardId) {
     if (!cardId) return null;
 
-    const pluginDataDir = config.getPluginDataDir();
-    const fullPath = path.join(pluginDataDir, 'library', 'characters', cardId);
+    const charactersDir = path.join(config.getPluginDataDir(), 'library', 'characters');
+    const fullPath = resolveInside(charactersDir, cardId);
 
-    if (!fs.existsSync(fullPath)) return null;
+    if (!fullPath || !fs.existsSync(fullPath)) return null;
 
     try {
         const stat = fs.statSync(fullPath);
         let cardData = null;
+        const ext = path.extname(fullPath).toLowerCase();
 
-        if (cardId.toLowerCase().endsWith('.png')) {
+        if (ext === '.png') {
             cardData = extractPngMetadata(fullPath);
         } else {
             cardData = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
@@ -232,7 +213,7 @@ function getCard(cardId) {
         return {
             id: cardId,
             path: fullPath,
-            imagePath: fullPath, // For thumbnail serving
+            imagePath: ext === '.png' ? fullPath : null,
             size: stat.size,
             mtime: stat.mtimeMs,
             data: cardData,
@@ -247,9 +228,7 @@ function getCard(cardId) {
  * 获取文件夹列表
  */
 function listFolders() {
-    const dataRoot = config.getDataRoot();
-    const resourceDirs = config.getResourceDirs();
-    const charactersDir = path.join(dataRoot, resourceDirs.characters);
+    const charactersDir = path.join(config.getPluginDataDir(), 'library', 'characters');
 
     const folders = new Set();
 
@@ -283,17 +262,18 @@ function moveCard(cardId, targetFolder) {
         return { success: false, error: '缺少卡片 ID' };
     }
 
-    const dataRoot = config.getDataRoot();
-    const resourceDirs = config.getResourceDirs();
-    const charactersDir = path.join(dataRoot, resourceDirs.characters);
-    const sourcePath = path.join(charactersDir, cardId);
+    const charactersDir = path.join(config.getPluginDataDir(), 'library', 'characters');
+    const sourcePath = resolveInside(charactersDir, cardId);
 
-    if (!fs.existsSync(sourcePath)) {
+    if (!sourcePath || !fs.existsSync(sourcePath)) {
         return { success: false, error: '卡片不存在' };
     }
 
     const filename = path.basename(cardId);
-    const targetDir = targetFolder ? path.join(charactersDir, targetFolder) : charactersDir;
+    const targetDir = targetFolder ? resolveInside(charactersDir, targetFolder) : charactersDir;
+    if (!targetDir) {
+        return { success: false, error: '无效目标路径' };
+    }
     const targetPath = path.join(targetDir, filename);
 
     // 确保目标目录存在
@@ -308,8 +288,7 @@ function moveCard(cardId, targetFolder) {
 
     try {
         fs.renameSync(sourcePath, targetPath);
-
-        const newId = targetFolder ? `${targetFolder}/${filename}` : filename;
+        const newId = path.relative(charactersDir, targetPath).replace(/\\/g, '/');
         return { success: true, newId };
     } catch (e) {
         console.error('[ST Manager] 移动卡片失败:', e);
@@ -385,18 +364,17 @@ function deleteCard(cardId, moveToTrash = true) {
         return { success: false, error: '缺少卡片 ID' };
     }
 
-    const dataRoot = config.getDataRoot();
-    const resourceDirs = config.getResourceDirs();
-    const sourcePath = path.join(dataRoot, resourceDirs.characters, cardId);
+    const charactersDir = path.join(config.getPluginDataDir(), 'library', 'characters');
+    const sourcePath = resolveInside(charactersDir, cardId);
 
-    if (!fs.existsSync(sourcePath)) {
+    if (!sourcePath || !fs.existsSync(sourcePath)) {
         return { success: false, error: '卡片不存在' };
     }
 
     try {
         if (moveToTrash) {
             // 移动到回收站
-            const trashDir = path.join(config.getPluginDataDir(), 'trash');
+            const trashDir = config.getTrashPath();
             if (!fs.existsSync(trashDir)) {
                 fs.mkdirSync(trashDir, { recursive: true });
             }
@@ -430,9 +408,11 @@ function createFolder(folderPath) {
         return { success: false, error: '无效的文件夹路径' };
     }
 
-    const dataRoot = config.getDataRoot();
-    const resourceDirs = config.getResourceDirs();
-    const fullPath = path.join(dataRoot, resourceDirs.characters, folderPath);
+    const charactersDir = path.join(config.getPluginDataDir(), 'library', 'characters');
+    const fullPath = resolveInside(charactersDir, folderPath);
+    if (!fullPath) {
+        return { success: false, error: '无效的文件夹路径' };
+    }
 
     if (fs.existsSync(fullPath)) {
         return { success: false, error: '文件夹已存在' };
@@ -460,17 +440,18 @@ function renameFolder(oldPath, newName) {
         return { success: false, error: '无效的文件夹名称' };
     }
 
-    const dataRoot = config.getDataRoot();
-    const resourceDirs = config.getResourceDirs();
-    const charactersDir = path.join(dataRoot, resourceDirs.characters);
-    const sourcePath = path.join(charactersDir, oldPath);
+    const charactersDir = path.join(config.getPluginDataDir(), 'library', 'characters');
+    const sourcePath = resolveInside(charactersDir, oldPath);
 
-    if (!fs.existsSync(sourcePath)) {
+    if (!sourcePath || !fs.existsSync(sourcePath)) {
         return { success: false, error: '文件夹不存在' };
     }
 
     const parentDir = path.dirname(sourcePath);
     const targetPath = path.join(parentDir, newName);
+    if (!resolveInside(charactersDir, path.relative(charactersDir, targetPath))) {
+        return { success: false, error: '无效的目标路径' };
+    }
 
     if (fs.existsSync(targetPath)) {
         return { success: false, error: '目标名称已存在' };
@@ -495,11 +476,10 @@ function deleteFolder(folderPath, recursive = false) {
         return { success: false, error: '缺少文件夹路径' };
     }
 
-    const dataRoot = config.getDataRoot();
-    const resourceDirs = config.getResourceDirs();
-    const fullPath = path.join(dataRoot, resourceDirs.characters, folderPath);
+    const charactersDir = path.join(config.getPluginDataDir(), 'library', 'characters');
+    const fullPath = resolveInside(charactersDir, folderPath);
 
-    if (!fs.existsSync(fullPath)) {
+    if (!fullPath || !fs.existsSync(fullPath)) {
         return { success: false, error: '文件夹不存在' };
     }
 

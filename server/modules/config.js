@@ -18,6 +18,99 @@ let pluginDataDir = '';    // 插件数据目录
 let pluginRoot = '';       // 插件根目录
 let legacyPluginDataDir = ''; // 旧插件数据目录 (data/plugins/st-manager)
 
+const DEFAULT_CONFIG = {
+    cards_dir: 'data/library/characters',
+    world_info_dir: 'data/library/lorebooks',
+    presets_dir: 'data/library/presets',
+    regex_dir: 'data/library/extensions/regex',
+    scripts_dir: 'data/library/extensions/tavern_helper',
+    quick_replies_dir: 'data/library/extensions/quick-replies',
+    resources_dir: 'data/library/resources',
+    default_sort: 'date_desc',
+    theme_accent: 'blue',
+    host: '127.0.0.1',
+    port: 5000,
+    st_url: 'http://127.0.0.1:8000',
+    st_data_dir: '',
+    st_auth_type: 'basic',
+    st_username: '',
+    st_password: '',
+    st_proxy: '',
+    items_per_page: 0,
+    items_per_page_wi: 0,
+    dark_mode: true,
+    font_style: 'sans',
+    card_width: 220,
+    bg_url: '',
+    bg_opacity: 0.95,
+    bg_blur: 0,
+    auto_save_enabled: false,
+    auto_save_interval: 3,
+    snapshot_limit_manual: 50,
+    snapshot_limit_auto: 5,
+    enable_auto_scan: true,
+    png_deterministic_sort: false,
+    allowed_abs_resource_roots: [],
+    wi_preview_limit: 300,
+    wi_preview_entry_max_chars: 2000,
+    auth_username: '',
+    auth_password: '',
+    auth_trusted_ips: [],
+    auto_rename_on_import: true,
+    active_automation_ruleset: null,
+    backup: {
+        enabled: false,
+        schedule: 'disabled',
+        hour: 3,
+        retentionDays: 30,
+    },
+};
+
+function _coerceStringArray(input) {
+    if (Array.isArray(input)) {
+        return input.map(v => String(v).trim()).filter(Boolean);
+    }
+    if (typeof input === 'string') {
+        return input.split(/[\r\n,]+/).map(v => v.trim()).filter(Boolean);
+    }
+    return [];
+}
+
+function _normalizeLoadedConfig(raw) {
+    if (!raw || typeof raw !== 'object') {
+        return {};
+    }
+    const normalized = { ...raw };
+    if (normalized.settings && typeof normalized.settings === 'object') {
+        Object.assign(normalized, normalized.settings);
+    }
+    delete normalized.success;
+    delete normalized.settings;
+    if (normalized.resourcesDir && !normalized.resources_dir) {
+        normalized.resources_dir = normalized.resourcesDir;
+    }
+    if (normalized.backupPath && !normalized.backup_path) {
+        normalized.backup_path = normalized.backupPath;
+    }
+    normalized.allowed_abs_resource_roots = _coerceStringArray(normalized.allowed_abs_resource_roots);
+    normalized.auth_trusted_ips = _coerceStringArray(normalized.auth_trusted_ips);
+    return normalized;
+}
+
+function _getEffectiveConfig() {
+    const normalized = _normalizeLoadedConfig(pluginConfig);
+    return {
+        ...DEFAULT_CONFIG,
+        ...normalized,
+        backup: {
+            ...DEFAULT_CONFIG.backup,
+            ...(normalized.backup && typeof normalized.backup === 'object' ? normalized.backup : {}),
+        },
+        allowed_abs_resource_roots: _coerceStringArray(normalized.allowed_abs_resource_roots),
+        auth_trusted_ips: _coerceStringArray(normalized.auth_trusted_ips),
+    };
+}
+
 // ==================== 路径探测 ====================
 
 function _isDir(p) {
@@ -133,8 +226,9 @@ function resolveUserDataDir(inputPath) {
 
 function recomputeDataRoot() {
     let resolved = null;
-    if (pluginConfig && pluginConfig.st_data_dir) {
-        resolved = resolveUserDataDir(pluginConfig.st_data_dir);
+    const cfg = _getEffectiveConfig();
+    if (cfg.st_data_dir) {
+        resolved = resolveUserDataDir(cfg.st_data_dir);
     }
     if (!resolved) {
         const fallback = path.join(stRoot, 'data', 'default-user');
@@ -239,7 +333,7 @@ function init() {
     // 加载配置
     if (fs.existsSync(configPath)) {
         try {
-            pluginConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+            pluginConfig = _normalizeLoadedConfig(JSON.parse(fs.readFileSync(configPath, 'utf-8')));
         } catch (e) {
             console.error('[ST Manager] 加载配置失败:', e);
             pluginConfig = {};
@@ -247,13 +341,21 @@ function init() {
     } else if (legacyPluginDataDir && fs.existsSync(path.join(legacyPluginDataDir, 'config.json'))) {
         try {
             const legacyPath = path.join(legacyPluginDataDir, 'config.json');
-            pluginConfig = JSON.parse(fs.readFileSync(legacyPath, 'utf-8'));
+            pluginConfig = _normalizeLoadedConfig(JSON.parse(fs.readFileSync(legacyPath, 'utf-8')));
             // 迁移到新位置
             fs.writeFileSync(configPath, JSON.stringify(pluginConfig, null, 2), 'utf-8');
         } catch (e) {
             console.error('[ST Manager] 迁移旧配置失败:', e);
             pluginConfig = {};
         }
+    }
+
+    // 规范化并补齐默认字段，避免历史配置结构导致设置缺失
+    pluginConfig = { ..._getEffectiveConfig() };
+    try {
+        fs.writeFileSync(configPath, JSON.stringify(pluginConfig, null, 2), 'utf-8');
+    } catch (e) {
+        console.warn('[ST Manager] 写回规范化配置失败:', e.message);
     }
 
     // 根据配置修正用户数据目录
@@ -329,14 +431,15 @@ function getResourceDirs() {
  *   - extensions/quick-replies/    (资源快速回复)
  */
 function getResourcesRoot() {
-    // 优先使用配置的路径，否则使用默认路径
-    const customPath = pluginConfig.resourcesDir;
-    if (customPath && fs.existsSync(customPath)) {
-        return customPath;
+    const cfg = _getEffectiveConfig();
+    const rawPath = String(cfg.resources_dir || '').trim();
+    if (!rawPath) {
+        return path.join(pluginDataDir, 'library', 'resources');
     }
-    // SillyTavern 默认的 card_assets 目录（跟随当前用户数据目录）
-    const base = dataRoot || path.join(stRoot, 'data', 'default-user');
-    return path.join(base, 'card_assets');
+    if (path.isAbsolute(rawPath)) {
+        return rawPath;
+    }
+    return path.join(pluginRoot || process.cwd(), rawPath);
 }
 
 /**
@@ -357,7 +460,26 @@ function getResourceSubDirs() {
  * 获取备份目录
  */
 function getBackupRoot() {
-    return pluginConfig.backupPath || path.join(stRoot, 'data', 'backups', 'st-manager');
+    const cfg = _getEffectiveConfig();
+    const raw = String(cfg.backup_path || cfg.backupPath || '').trim();
+    if (!raw) {
+        return path.join(stRoot, 'data', 'backups', 'st-manager');
+    }
+    return path.isAbsolute(raw) ? raw : path.join(pluginRoot || process.cwd(), raw);
+}
+
+/**
+ * 获取回收站目录（插件私有）
+ */
+function getTrashPath() {
+    return path.join(getSystemDir(), 'trash');
+}
+
+/**
+ * 获取缩略图缓存目录（插件私有）
+ */
+function getThumbnailPath() {
+    return path.join(getSystemDir(), 'thumbnails');
 }
 
 /**
@@ -423,22 +545,19 @@ function saveUiData(data) {
  * 获取配置
  */
 function get() {
+    const cfg = _getEffectiveConfig();
     return {
+        ...cfg,
         stRoot,
         dataRoot,
         pluginRoot,
         storageRoot: pluginDataDir,
-        st_data_dir: pluginConfig.st_data_dir || '',
+        st_data_dir: cfg.st_data_dir || '',
         resourcesRoot: getResourcesRoot(),
         backupPath: getBackupRoot(),
-        backup: pluginConfig.backup || {
-            enabled: false,
-            schedule: 'disabled',
-            hour: 3,
-            retentionDays: 30,
-        },
-        autoSync: pluginConfig.autoSync !== false,
-        trackChanges: pluginConfig.trackChanges !== false,
+        backup: cfg.backup,
+        autoSync: cfg.autoSync !== false,
+        trackChanges: cfg.trackChanges !== false,
     };
 }
 
@@ -446,8 +565,25 @@ function get() {
  * 更新配置
  */
 function update(newConfig) {
-    Object.assign(pluginConfig, newConfig);
-    
+    const incoming = _normalizeLoadedConfig(newConfig || {});
+    const nextConfig = { ..._getEffectiveConfig(), ...incoming };
+    nextConfig.allowed_abs_resource_roots = _coerceStringArray(nextConfig.allowed_abs_resource_roots);
+    nextConfig.auth_trusted_ips = _coerceStringArray(nextConfig.auth_trusted_ips);
+    nextConfig.backup = {
+        ...DEFAULT_CONFIG.backup,
+        ...(nextConfig.backup && typeof nextConfig.backup === 'object' ? nextConfig.backup : {}),
+    };
+
+    // 运行时字段不应持久化
+    delete nextConfig.stRoot;
+    delete nextConfig.dataRoot;
+    delete nextConfig.pluginRoot;
+    delete nextConfig.storageRoot;
+    delete nextConfig.resourcesRoot;
+    delete nextConfig.backupPath;
+
+    pluginConfig = nextConfig;
+
     try {
         fs.writeFileSync(configPath, JSON.stringify(pluginConfig, null, 2), 'utf-8');
         recomputeDataRoot();
@@ -491,6 +627,8 @@ module.exports = {
     getResourcesRoot,
     getResourceSubDirs,
     getBackupRoot,
+    getTrashPath,
+    getThumbnailPath,
     getRulesDir,
     getUiDataPath,
     loadUiData,
