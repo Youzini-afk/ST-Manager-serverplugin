@@ -1185,6 +1185,358 @@ function _detectResourceCategory(filename, contentBuffer) {
     return { category, isLorebook, isPreset };
 }
 
+const CARD_FILE_EXTS = new Set(['.png', '.json']);
+const IMAGE_FILE_EXTS = new Set(['.png', '.webp', '.jpg', '.jpeg', '.gif', '.bmp']);
+
+function _parseJsonInput(raw, fallback = {}) {
+    if (raw === undefined || raw === null || raw === '') return fallback;
+    if (typeof raw === 'object') return raw;
+    try {
+        return JSON.parse(String(raw));
+    } catch (e) {
+        return fallback;
+    }
+}
+
+function _parseKeepUiData(rawValue) {
+    const parsed = _parseJsonInput(rawValue, {});
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+}
+
+function _removePathIfExists(filePath) {
+    if (!filePath) return;
+    try {
+        if (!fs.existsSync(filePath)) return;
+        const stat = fs.statSync(filePath);
+        if (stat.isDirectory()) {
+            fs.rmSync(filePath, { recursive: true, force: true });
+        } else {
+            fs.unlinkSync(filePath);
+        }
+    } catch (e) {
+        // ignore
+    }
+}
+
+function _moveFileSafely(sourcePath, targetPath) {
+    try {
+        fs.renameSync(sourcePath, targetPath);
+    } catch (e) {
+        fs.copyFileSync(sourcePath, targetPath);
+        try {
+            fs.unlinkSync(sourcePath);
+        } catch (_unlinkError) {
+            // ignore temp-source cleanup failure
+        }
+    }
+}
+
+function _moveUiEntryById(oldId, newId) {
+    if (!config || typeof config.loadUiData !== 'function' || typeof config.saveUiData !== 'function') return;
+    const uiData = config.loadUiData() || {};
+    const oldKey = _resolveUiKey(uiData, oldId);
+    const newKey = _resolveUiKey(uiData, newId);
+    if (!oldKey || !newKey || oldKey === newKey || !uiData[oldKey]) return;
+    if (!uiData[newKey] || typeof uiData[newKey] !== 'object') {
+        uiData[newKey] = {};
+    }
+    uiData[newKey] = { ...uiData[oldKey], ...uiData[newKey] };
+    delete uiData[oldKey];
+    config.saveUiData(uiData);
+}
+
+function _buildUpdatePayloadFromKeep(keepUiData = {}) {
+    const payload = {};
+    if (Object.prototype.hasOwnProperty.call(keepUiData, 'ui_summary')) {
+        payload.ui_summary = keepUiData.ui_summary;
+    }
+    if (Object.prototype.hasOwnProperty.call(keepUiData, 'source_link')) {
+        payload.source_link = keepUiData.source_link;
+    }
+    if (Object.prototype.hasOwnProperty.call(keepUiData, 'resource_folder')) {
+        payload.resource_folder = keepUiData.resource_folder;
+    }
+    if (Array.isArray(keepUiData.tags)) {
+        payload.tags = keepUiData.tags;
+    }
+    return payload;
+}
+
+function _listSidecarImages(baseNoExt, keepExt = '') {
+    const exts = ['.png', '.webp', '.jpg', '.jpeg', '.gif', '.bmp'];
+    const keep = String(keepExt || '').toLowerCase();
+    const results = [];
+    for (const ext of exts) {
+        if (keep && ext === keep) continue;
+        const fullPath = `${baseNoExt}${ext}`;
+        if (_isFile(fullPath)) results.push(fullPath);
+    }
+    return results;
+}
+
+function _findAvailableFilename(dirPath, filename) {
+    const safe = _sanitizeFileName(filename);
+    const ext = path.extname(safe);
+    const base = path.basename(safe, ext);
+    let candidate = safe;
+    let target = path.join(dirPath, candidate);
+    let index = 1;
+    while (fs.existsSync(target)) {
+        candidate = `${base}_${index}${ext}`;
+        target = path.join(dirPath, candidate);
+        index += 1;
+    }
+    return { filename: candidate, fullPath: target };
+}
+
+function _buildCardResponse(cardId) {
+    if (!cards || typeof cards.getCard !== 'function') return null;
+    const card = cards.getCard(cardId);
+    if (!card || !card.data) return null;
+
+    const raw = card.data || {};
+    const dataBlock = raw.data || raw;
+    const uiData = config && typeof config.loadUiData === 'function' ? config.loadUiData() : {};
+    const uiKey = _resolveUiKey(uiData, cardId);
+    const ui = uiData[uiKey] || {};
+    const stat = card.path && _isFile(card.path) ? fs.statSync(card.path) : null;
+    const mtimeSec = stat ? Math.floor((stat.mtimeMs || 0) / 1000) : Math.floor(Date.now() / 1000);
+    const category = cardId.includes('/') ? cardId.slice(0, cardId.lastIndexOf('/')) : '';
+    const folderMarker = category ? resolveInside(_getLibraryCharactersDir(), `${category}/.bundle`) : null;
+    const isBundle = Boolean(folderMarker && _isFile(folderMarker));
+
+    return {
+        id: cardId,
+        filename: path.basename(cardId),
+        char_name: dataBlock.name || '',
+        description: dataBlock.description || '',
+        first_mes: dataBlock.first_mes || '',
+        mes_example: dataBlock.mes_example || '',
+        alternate_greetings: Array.isArray(dataBlock.alternate_greetings) ? dataBlock.alternate_greetings : [],
+        creator_notes: dataBlock.creator_notes || '',
+        personality: dataBlock.personality || '',
+        scenario: dataBlock.scenario || '',
+        system_prompt: dataBlock.system_prompt || '',
+        post_history_instructions: dataBlock.post_history_instructions || '',
+        char_version: dataBlock.character_version || '',
+        character_book: dataBlock.character_book || null,
+        extensions: dataBlock.extensions || {},
+        ui_summary: ui.summary || '',
+        source_link: ui.link || '',
+        resource_folder: ui.resource_folder || '',
+        is_favorite: Boolean(ui.is_favorite ?? ui.favorite),
+        token_count: _estimateTokenCount(dataBlock),
+        file_size: stat ? stat.size : 0,
+        tags: Array.isArray(dataBlock.tags) ? dataBlock.tags : [],
+        category,
+        creator: dataBlock.creator || '',
+        image_url: `/cards_file/${encodeURIComponent(cardId)}?t=${mtimeSec}`,
+        thumb_url: `/api/thumbnail/${encodeURIComponent(cardId)}?t=${mtimeSec}`,
+        last_modified: mtimeSec,
+        is_bundle: isBundle,
+        bundle_dir: isBundle ? category : undefined,
+    };
+}
+
+function _getUrlImportStageRoot() {
+    const tempDir = (config && typeof config.getTempDir === 'function')
+        ? config.getTempDir()
+        : path.join(_getPluginDataDir(), 'temp');
+    return path.join(tempDir, 'url_import');
+}
+
+function _saveUrlImportStage(filename, buffer) {
+    const root = _getUrlImportStageRoot();
+    _ensureDir(root);
+    const safeName = _sanitizeFileName(filename || `import_${Date.now()}.png`);
+    const token = crypto.randomBytes(10).toString('hex');
+    const stageName = `${token}__${safeName}`;
+    const stagePath = path.join(root, stageName);
+    fs.writeFileSync(stagePath, buffer);
+    return { stageName, stagePath, originalName: safeName };
+}
+
+function _loadUrlImportStage(tempFilename) {
+    const safeName = path.basename(String(tempFilename || '').trim());
+    if (!safeName || !safeName.includes('__')) return null;
+    const stagePath = resolveInside(_getUrlImportStageRoot(), safeName);
+    if (!stagePath || !_isFile(stagePath)) return null;
+    const split = safeName.split('__');
+    const originalName = split.slice(1).join('__') || 'import.png';
+    return { stageName: safeName, stagePath, originalName };
+}
+
+function _removeUrlImportStage(tempFilename) {
+    const staged = _loadUrlImportStage(tempFilename);
+    if (!staged) return;
+    _removePathIfExists(staged.stagePath);
+}
+
+async function _downloadFileFromUrl(targetUrl, maxBytes = 80 * 1024 * 1024) {
+    let parsedUrl = null;
+    try {
+        parsedUrl = new URL(String(targetUrl || '').trim());
+    } catch (e) {
+        throw new Error('URL 格式无效');
+    }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        throw new Error('仅支持 HTTP/HTTPS URL');
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    let response;
+    try {
+        response = await fetch(parsedUrl.toString(), {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'ST-Manager-serverplugin/1.0',
+                'Referer': parsedUrl.toString(),
+            },
+            signal: controller.signal,
+            redirect: 'follow',
+        });
+    } finally {
+        clearTimeout(timer);
+    }
+
+    if (!response || !response.ok) {
+        throw new Error(`下载失败: HTTP ${response ? response.status : 'unknown'}`);
+    }
+
+    const lengthHeader = Number(response.headers.get('content-length') || 0);
+    if (lengthHeader > maxBytes) {
+        throw new Error('文件过大');
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    if (buffer.length > maxBytes) {
+        throw new Error('文件过大');
+    }
+
+    const disposition = String(response.headers.get('content-disposition') || '');
+    let filename = '';
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match && utf8Match[1]) {
+        try { filename = decodeURIComponent(utf8Match[1]); } catch (e) {}
+    }
+    if (!filename) {
+        const simpleMatch = disposition.match(/filename="([^"]+)"/i);
+        if (simpleMatch && simpleMatch[1]) filename = simpleMatch[1];
+    }
+    if (!filename) {
+        filename = path.basename(decodeURIComponent(parsedUrl.pathname || '')) || `import_${Date.now()}.png`;
+    }
+
+    const safeName = _sanitizeFileName(filename);
+    const ext = path.extname(safeName).toLowerCase();
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+    if (!ext) {
+        if (contentType.includes('application/json') || contentType.includes('text/json')) {
+            return { buffer, filename: `${safeName}.json` };
+        }
+        return { buffer, filename: `${safeName}.png` };
+    }
+    return { buffer, filename: safeName };
+}
+
+function _applyCardUploadUpdate({ cardId, uploadFile, isBundleUpdate = false, keepUiData = {}, imagePolicy = 'overwrite' }) {
+    const normalizedId = _normalizeSlash(cardId || '').trim();
+    const oldPath = _resolveCardFilePath(normalizedId);
+    if (!normalizedId || !oldPath || !_isFile(oldPath)) {
+        return { success: false, msg: '卡片不存在' };
+    }
+    if (!uploadFile || !uploadFile.data) {
+        return { success: false, msg: '未接收到文件' };
+    }
+
+    const safeName = _sanitizeFileName(uploadFile.filename || 'upload.bin');
+    const uploadExt = path.extname(safeName).toLowerCase();
+    if (!CARD_FILE_EXTS.has(uploadExt)) {
+        return { success: false, msg: '仅支持 PNG/JSON 角色卡文件' };
+    }
+
+    const tempDir = (config && typeof config.getTempDir === 'function')
+        ? config.getTempDir()
+        : path.join(_getPluginDataDir(), 'temp');
+    _ensureDir(tempDir);
+    const tmpPath = path.join(tempDir, `card_update_${Date.now()}_${crypto.randomBytes(6).toString('hex')}${uploadExt}`);
+
+    try {
+        fs.writeFileSync(tmpPath, uploadFile.data);
+        const parsed = _extractCardDataFromFile(tmpPath);
+        if (!parsed || !parsed.raw) {
+            _removePathIfExists(tmpPath);
+            return { success: false, msg: '上传文件不是有效角色卡 (未找到元数据)' };
+        }
+
+        const charactersDir = _getLibraryCharactersDir();
+        const oldExt = path.extname(oldPath).toLowerCase();
+        let finalPath = oldPath;
+        let finalId = normalizedId;
+        let idChanged = false;
+
+        if (isBundleUpdate) {
+            const targetDir = path.dirname(oldPath);
+            const sourceBase = path.basename(safeName, uploadExt) || path.basename(normalizedId, path.extname(normalizedId));
+            const initialFilename = `${sourceBase}${uploadExt}`;
+            const available = _findAvailableFilename(targetDir, initialFilename);
+            finalPath = available.fullPath;
+            _moveFileSafely(tmpPath, finalPath);
+            finalId = path.relative(charactersDir, finalPath).replace(/\\/g, '/');
+            idChanged = true;
+        } else {
+            const baseNoExt = path.join(path.dirname(oldPath), path.basename(oldPath, oldExt));
+            finalPath = `${baseNoExt}${uploadExt}`;
+            finalId = path.relative(charactersDir, finalPath).replace(/\\/g, '/');
+            idChanged = finalId !== normalizedId;
+
+            if (idChanged && fs.existsSync(finalPath)) {
+                _removePathIfExists(finalPath);
+            }
+            _moveFileSafely(tmpPath, finalPath);
+
+            if (idChanged) {
+                if (!(oldExt === '.png' && uploadExt === '.json' && imagePolicy === 'keep_image')) {
+                    _removePathIfExists(oldPath);
+                }
+                if (oldExt === '.json') {
+                    const oldBase = path.join(path.dirname(oldPath), path.basename(oldPath, '.json'));
+                    const keep = uploadExt === '.png' ? '.png' : '';
+                    const sidecars = _listSidecarImages(oldBase, keep);
+                    for (const sidecar of sidecars) _removePathIfExists(sidecar);
+                }
+            }
+        }
+
+        if (idChanged) {
+            _moveUiEntryById(normalizedId, finalId);
+        }
+
+        const keepPayload = _buildUpdatePayloadFromKeep(keepUiData);
+        const updateResult = cards && typeof cards.updateCard === 'function'
+            ? cards.updateCard(finalId, { id: finalId, ...keepPayload })
+            : { success: false, msg: 'cards.updateCard 不可用' };
+        if (!updateResult.success) {
+            return updateResult;
+        }
+        if (idChanged && !updateResult.new_id) {
+            updateResult.new_id = finalId;
+            updateResult.new_filename = path.basename(finalId);
+        }
+        if (!updateResult.updated_card) {
+            updateResult.updated_card = _buildCardResponse(finalId);
+        }
+        updateResult.file_modified = true;
+        return updateResult;
+    } catch (e) {
+        return { success: false, msg: e.message };
+    } finally {
+        _removePathIfExists(tmpPath);
+    }
+}
+
 /**
  * 初始化 API 模块
  */
@@ -1608,92 +1960,11 @@ function registerRoutes(app, staticDir) {
     app.post('/api/update_card', (req, res) => {
         try {
             const payload = req.body || {};
-            if (cards && typeof cards.updateCard === 'function') {
-                const result = cards.updateCard(payload.id, payload);
-                return res.json(result);
+            if (!cards || typeof cards.updateCard !== 'function') {
+                return res.json({ success: false, msg: 'cards.updateCard 不可用' });
             }
-            const cardId = payload.id;
-            if (!cardId) {
-                return res.json({ success: false, msg: '缺少卡片 ID' });
-            }
-            const card = cards.getCard(cardId);
-            if (!card || !card.path || !_isFile(card.path)) {
-                return res.json({ success: false, msg: '卡片不存在' });
-            }
-            const ext = path.extname(card.path).toLowerCase();
-            if (ext !== '.json') {
-                return res.json({ success: false, msg: '当前版本暂不支持直接写回 PNG 卡片' });
-            }
-            const raw = card.data || {};
-            const isWrapped = Boolean(raw && raw.data && typeof raw.data === 'object' && !Array.isArray(raw.data));
-            const base = isWrapped ? { ...raw } : { ...raw };
-            const dataBlock = isWrapped ? { ...(raw.data || {}) } : { ...(raw || {}) };
-
-            const fieldMap = {
-                char_name: 'name',
-                description: 'description',
-                first_mes: 'first_mes',
-                mes_example: 'mes_example',
-                creator_notes: 'creator_notes',
-                personality: 'personality',
-                scenario: 'scenario',
-                system_prompt: 'system_prompt',
-                post_history_instructions: 'post_history_instructions',
-                creator: 'creator',
-                char_version: 'character_version',
-                character_version: 'character_version',
-            };
-            for (const [from, to] of Object.entries(fieldMap)) {
-                if (payload[from] !== undefined) {
-                    dataBlock[to] = payload[from];
-                }
-            }
-            if (Array.isArray(payload.alternate_greetings)) {
-                dataBlock.alternate_greetings = payload.alternate_greetings;
-            }
-            if (Array.isArray(payload.tags)) {
-                dataBlock.tags = payload.tags;
-            }
-            if (payload.extensions && typeof payload.extensions === 'object') {
-                dataBlock.extensions = payload.extensions;
-            }
-            if (payload.character_book !== undefined) {
-                dataBlock.character_book = payload.character_book;
-            }
-            if (typeof payload.character_book_raw === 'string' && payload.character_book_raw.trim()) {
-                try {
-                    dataBlock.character_book = JSON.parse(payload.character_book_raw);
-                } catch (e) {
-                    return res.json({ success: false, msg: '世界书 JSON 格式错误' });
-                }
-            }
-
-            if (isWrapped) {
-                base.data = dataBlock;
-            } else {
-                Object.assign(base, dataBlock);
-            }
-            fs.writeFileSync(card.path, JSON.stringify(base, null, 2), 'utf-8');
-
-            if (config) {
-                const uiData = config.loadUiData();
-                const uiKey = _resolveUiKey(uiData, cardId);
-                if (!uiData[uiKey] || typeof uiData[uiKey] !== 'object') {
-                    uiData[uiKey] = {};
-                }
-                if (payload.ui_summary !== undefined) uiData[uiKey].summary = payload.ui_summary;
-                if (payload.source_link !== undefined) uiData[uiKey].link = payload.source_link;
-                if (payload.resource_folder !== undefined) uiData[uiKey].resource_folder = _sanitizeRelativeFolder(payload.resource_folder || '');
-                config.saveUiData(uiData);
-            }
-
-            const display = {
-                id: cardId,
-                char_name: dataBlock.name || '',
-                category: cardId.includes('/') ? cardId.slice(0, cardId.lastIndexOf('/')) : '',
-                filename: path.basename(cardId),
-            };
-            res.json({ success: true, updated_card: display });
+            const result = cards.updateCard(payload.id, payload);
+            return res.json(result);
         } catch (e) {
             res.json({ success: false, msg: e.message });
         }
@@ -1907,43 +2178,305 @@ function registerRoutes(app, staticDir) {
     });
 
     // 从 URL 导入
-    app.post('/api/import_from_url', (req, res) => {
+    app.post('/api/import_from_url', async (req, res) => {
         try {
-            const { url, category } = req.body || {};
-            const result = cards.importFromUrl ? cards.importFromUrl(url, category) : { success: false, error: '功能未实现' };
-            res.json(result);
+            const data = req.body || {};
+            const url = String(data.url || '').trim();
+            let targetCategory = _sanitizeRelativeFolder(data.category || '');
+            if (targetCategory === '根目录') targetCategory = '';
+            const resolution = String(data.resolution || 'check');
+            const reuseTempName = String(data.temp_filename || '').trim();
+
+            let staged = null;
+            if (reuseTempName) {
+                staged = _loadUrlImportStage(reuseTempName);
+                if (!staged) {
+                    return res.json({ success: false, msg: '临时文件已过期或不存在，请重新导入' });
+                }
+                if (resolution === 'cancel') {
+                    _removeUrlImportStage(reuseTempName);
+                    return res.json({ success: true, msg: '已取消导入' });
+                }
+            } else {
+                if (!url) return res.json({ success: false, msg: 'URL 不能为空' });
+                const downloaded = await _downloadFileFromUrl(url);
+                const ext = path.extname(downloaded.filename).toLowerCase();
+                if (!CARD_FILE_EXTS.has(ext)) {
+                    return res.json({ success: false, msg: '仅支持 PNG/JSON 角色卡导入' });
+                }
+                staged = _saveUrlImportStage(downloaded.filename, downloaded.buffer);
+            }
+
+            const info = _extractCardDataFromFile(staged.stagePath);
+            if (!info) {
+                _removeUrlImportStage(staged.stageName);
+                return res.json({ success: false, msg: '文件不是有效的角色卡 (未找到元数据)' });
+            }
+
+            const dataBlock = info.data || {};
+            const autoRename = !(config && typeof config.get === 'function' && config.get().auto_rename_on_import === false);
+            const originalExt = path.extname(staged.originalName || '').toLowerCase() || '.png';
+            const baseName = (autoRename && info.name)
+                ? _sanitizeFolderSegment(info.name)
+                : path.basename(staged.originalName || `import_${Date.now()}${originalExt}`, originalExt);
+            let finalFilename = `${baseName}${originalExt}`;
+
+            const targetDir = targetCategory
+                ? resolveInside(_getLibraryCharactersDir(), targetCategory)
+                : _getLibraryCharactersDir();
+            if (!targetDir) {
+                return res.status(400).json({ success: false, msg: '非法目标路径' });
+            }
+            _ensureDir(targetDir);
+
+            let targetPath = path.join(targetDir, finalFilename);
+            const targetBase = path.join(targetDir, path.basename(finalFilename, originalExt));
+            const hasConflict = fs.existsSync(targetPath)
+                || fs.existsSync(`${targetBase}.json`)
+                || (originalExt === '.json' && fs.existsSync(`${targetBase}.png`));
+
+            if (hasConflict) {
+                if (resolution === 'check') {
+                    const existingParsed = _extractCardDataFromFile(targetPath);
+                    const existingData = existingParsed ? (existingParsed.data || {}) : {};
+                    return res.json({
+                        success: false,
+                        status: 'conflict',
+                        msg: '检测到同名角色卡',
+                        temp_filename: staged.stageName,
+                        existing_card: {
+                            char_name: existingParsed ? existingParsed.name : path.basename(finalFilename, originalExt),
+                            token_count: _estimateTokenCount(existingData),
+                            file_size: _isFile(targetPath) ? fs.statSync(targetPath).size : 0,
+                            image_url: `/cards_file/${encodeURIComponent(targetCategory ? `${targetCategory}/${finalFilename}` : finalFilename)}?t=${Date.now()}`,
+                        },
+                        new_card: {
+                            char_name: info.name || path.basename(finalFilename, originalExt),
+                            token_count: _estimateTokenCount(dataBlock),
+                            file_size: fs.statSync(staged.stagePath).size,
+                            image_url: url || `/api/temp_preview/${encodeURIComponent(staged.stageName)}`,
+                        },
+                    });
+                } else if (resolution === 'rename') {
+                    const ext = path.extname(finalFilename).toLowerCase() || originalExt;
+                    const base = path.basename(finalFilename, ext);
+                    let index = 1;
+                    let found = false;
+                    while (!found) {
+                        const candidateName = `${base}_${index}${ext}`;
+                        const candidatePath = path.join(targetDir, candidateName);
+                        const candidateBase = path.join(targetDir, path.basename(candidateName, ext));
+                        const hasPairConflict = fs.existsSync(`${candidateBase}.json`) || fs.existsSync(`${candidateBase}.png`);
+                        if (!fs.existsSync(candidatePath) && !hasPairConflict) {
+                            finalFilename = candidateName;
+                            targetPath = candidatePath;
+                            found = true;
+                            break;
+                        }
+                        index += 1;
+                    }
+                } else if (resolution === 'overwrite') {
+                    const existingParsed = _extractCardDataFromFile(targetPath);
+                    if (existingParsed && existingParsed.raw && info.raw) {
+                        const existingTags = new Set(Array.isArray((existingParsed.data || {}).tags) ? (existingParsed.data || {}).tags : []);
+                        const incoming = info.raw;
+                        const block = incoming.data && typeof incoming.data === 'object' ? incoming.data : incoming;
+                        const incomingTags = Array.isArray(block.tags) ? block.tags : [];
+                        for (const tag of incomingTags) existingTags.add(tag);
+                        block.tags = Array.from(existingTags).map(v => String(v).trim()).filter(Boolean);
+                        if (cards && typeof cards.writeCardMetadataFile === 'function') {
+                            cards.writeCardMetadataFile(staged.stagePath, incoming);
+                        }
+                    }
+                    _removePathIfExists(targetPath);
+                    const pairBase = path.join(targetDir, path.basename(finalFilename, originalExt));
+                    if (originalExt !== '.json') _removePathIfExists(`${pairBase}.json`);
+                    if (originalExt !== '.png') _removePathIfExists(`${pairBase}.png`);
+                } else if (resolution !== 'cancel') {
+                    _removeUrlImportStage(staged.stageName);
+                    return res.json({ success: false, msg: `无效的解决策略: ${resolution}` });
+                }
+            }
+
+            _moveFileSafely(staged.stagePath, targetPath);
+            _removeUrlImportStage(staged.stageName);
+
+            const relPath = targetCategory ? `${targetCategory}/${path.basename(targetPath)}` : path.basename(targetPath);
+            const newCard = _buildCardResponse(relPath);
+            return res.json({
+                success: true,
+                new_card: newCard,
+                category_counts: _buildCategoryCounts(_getAllCardsForStats()),
+            });
         } catch (e) {
-            res.json({ success: false, error: e.message });
+            res.json({ success: false, msg: e.message });
         }
     });
 
     // 更换头像 (FormData)
-    app.post('/api/change_image', (req, res) => {
+    app.post('/api/change_image', async (req, res) => {
         try {
-            // FormData 处理需要 multer 中间件
-            res.json({ success: false, error: '需要 multer 中间件' });
+            const { fields, files } = await _parseMultipartForm(req, 40 * 1024 * 1024);
+            const rawId = _normalizeSlash(fields.id || '').trim();
+            const uploaded = _pickMultipartFile(files, 'image');
+            if (!rawId || !uploaded || !uploaded.data) {
+                return res.json({ success: false, msg: 'Missing ID or File' });
+            }
+            const cardPath = _resolveCardFilePath(rawId);
+            if (!cardPath || !_isFile(cardPath)) {
+                return res.json({ success: false, msg: 'Card not found' });
+            }
+
+            const uploadName = _sanitizeFileName(uploaded.filename || 'image.png');
+            const uploadExt = path.extname(uploadName).toLowerCase();
+            if (!IMAGE_FILE_EXTS.has(uploadExt)) {
+                return res.json({ success: false, msg: '仅支持常见图片格式' });
+            }
+
+            const oldExt = path.extname(cardPath).toLowerCase();
+            const baseNoExt = cardPath.slice(0, -oldExt.length);
+            const charactersDir = _getLibraryCharactersDir();
+
+            if (oldExt === '.png' && uploadExt === '.png') {
+                const oldData = cards && typeof cards.readCardFile === 'function' ? cards.readCardFile(cardPath) : null;
+                if (!oldData) return res.json({ success: false, msg: '无法读取原图片元数据' });
+                fs.writeFileSync(cardPath, uploaded.data);
+                if (!(cards && cards.writeCardMetadataFile && cards.writeCardMetadataFile(cardPath, oldData))) {
+                    return res.json({ success: false, msg: '写回元数据失败' });
+                }
+                return res.json({
+                    success: true,
+                    new_id: rawId,
+                    new_image_url: `/cards_file/${encodeURIComponent(rawId)}?t=${Date.now()}`,
+                    updated_card: _buildCardResponse(rawId),
+                });
+            }
+
+            if (oldExt === '.json') {
+                if (uploadExt === '.png') {
+                    const oldData = cards && typeof cards.readCardFile === 'function' ? cards.readCardFile(cardPath) : null;
+                    if (!oldData) return res.json({ success: false, msg: '无法读取原 JSON 元数据' });
+
+                    const newPngPath = `${baseNoExt}.png`;
+                    fs.writeFileSync(newPngPath, uploaded.data);
+                    if (!(cards && cards.writeCardMetadataFile && cards.writeCardMetadataFile(newPngPath, oldData))) {
+                        _removePathIfExists(newPngPath);
+                        return res.json({ success: false, msg: '写回 PNG 元数据失败' });
+                    }
+                    _removePathIfExists(cardPath);
+                    for (const sidecar of _listSidecarImages(baseNoExt, '.png')) {
+                        _removePathIfExists(sidecar);
+                    }
+
+                    const newId = path.relative(charactersDir, newPngPath).replace(/\\/g, '/');
+                    _moveUiEntryById(rawId, newId);
+                    return res.json({
+                        success: true,
+                        new_id: newId,
+                        new_image_url: `/cards_file/${encodeURIComponent(newId)}?t=${Date.now()}`,
+                        updated_card: _buildCardResponse(newId),
+                    });
+                }
+
+                const sidecarPath = `${baseNoExt}${uploadExt}`;
+                fs.writeFileSync(sidecarPath, uploaded.data);
+                for (const sidecar of _listSidecarImages(baseNoExt, uploadExt)) {
+                    _removePathIfExists(sidecar);
+                }
+                return res.json({
+                    success: true,
+                    new_id: rawId,
+                    new_image_url: `/cards_file/${encodeURIComponent(rawId)}?t=${Date.now()}`,
+                    updated_card: _buildCardResponse(rawId),
+                });
+            }
+
+            if (oldExt === '.png' && uploadExt !== '.png') {
+                const oldData = cards && typeof cards.readCardFile === 'function' ? cards.readCardFile(cardPath) : null;
+                if (!oldData) return res.json({ success: false, msg: '无法读取原图片元数据' });
+
+                const jsonPath = `${baseNoExt}.json`;
+                if (!(cards && cards.writeCardMetadataFile && cards.writeCardMetadataFile(jsonPath, oldData))) {
+                    return res.json({ success: false, msg: '写回 JSON 元数据失败' });
+                }
+                const sidecarPath = `${baseNoExt}${uploadExt}`;
+                fs.writeFileSync(sidecarPath, uploaded.data);
+                _removePathIfExists(cardPath);
+                for (const sidecar of _listSidecarImages(baseNoExt, uploadExt)) {
+                    _removePathIfExists(sidecar);
+                }
+
+                const newId = path.relative(charactersDir, jsonPath).replace(/\\/g, '/');
+                _moveUiEntryById(rawId, newId);
+                return res.json({
+                    success: true,
+                    new_id: newId,
+                    new_image_url: `/cards_file/${encodeURIComponent(newId)}?t=${Date.now()}`,
+                    updated_card: _buildCardResponse(newId),
+                });
+            }
+
+            return res.json({ success: false, msg: '暂不支持该转换组合' });
         } catch (e) {
-            res.json({ success: false, error: e.message });
+            res.json({ success: false, msg: e.message });
         }
     });
 
     // 更新卡片文件
-    app.post('/api/update_card_file', (req, res) => {
+    app.post('/api/update_card_file', async (req, res) => {
         try {
-            res.json({ success: false, error: '需要 multer 中间件' });
+            const { fields, files } = await _parseMultipartForm(req, 50 * 1024 * 1024);
+            const cardId = _normalizeSlash(fields.card_id || '').trim();
+            const uploaded = _pickMultipartFile(files, 'new_card');
+            const isBundleUpdate = String(fields.is_bundle_update || '').toLowerCase() === 'true';
+            const imagePolicy = String(fields.image_policy || 'overwrite');
+            const keepUiData = _parseKeepUiData(fields.keep_ui_data);
+
+            const result = _applyCardUploadUpdate({
+                cardId,
+                uploadFile: uploaded,
+                isBundleUpdate,
+                keepUiData,
+                imagePolicy,
+            });
+            res.json(result);
         } catch (e) {
-            res.json({ success: false, error: e.message });
+            res.json({ success: false, msg: e.message });
         }
     });
 
     // 从 URL 更新卡片
-    app.post('/api/update_card_from_url', (req, res) => {
+    app.post('/api/update_card_from_url', async (req, res) => {
         try {
             const payload = req.body || {};
-            const result = cards.updateFromUrl ? cards.updateFromUrl(payload) : { success: false, error: '功能未实现' };
+            const cardId = _normalizeSlash(payload.card_id || '').trim();
+            const targetUrl = String(payload.url || '').trim();
+            const isBundleUpdate = Boolean(payload.is_bundle_update);
+            const imagePolicy = String(payload.image_policy || 'overwrite');
+            const keepUiData = _parseKeepUiData(payload.keep_ui_data);
+            if (!cardId) return res.json({ success: false, msg: '缺少 card_id' });
+            if (!targetUrl) return res.json({ success: false, msg: 'URL不能为空' });
+
+            const downloaded = await _downloadFileFromUrl(targetUrl, 80 * 1024 * 1024);
+            const ext = path.extname(downloaded.filename).toLowerCase();
+            if (!CARD_FILE_EXTS.has(ext)) {
+                return res.json({ success: false, msg: 'URL 指向文件不是 PNG/JSON 角色卡' });
+            }
+
+            const result = _applyCardUploadUpdate({
+                cardId,
+                uploadFile: {
+                    filename: downloaded.filename,
+                    data: downloaded.buffer,
+                    contentType: 'application/octet-stream',
+                },
+                isBundleUpdate,
+                keepUiData,
+                imagePolicy,
+            });
             res.json(result);
         } catch (e) {
-            res.json({ success: false, error: e.message });
+            res.json({ success: false, msg: e.message });
         }
     });
 
@@ -1951,10 +2484,13 @@ function registerRoutes(app, staticDir) {
     app.post('/api/convert_to_bundle', (req, res) => {
         try {
             const { card_id, bundle_name } = req.body || {};
-            const result = cards.convertToBundle ? cards.convertToBundle(card_id, bundle_name) : { success: false, error: '功能未实现' };
+            if (!cards || typeof cards.convertToBundle !== 'function') {
+                return res.json({ success: false, msg: 'convertToBundle 不可用' });
+            }
+            const result = cards.convertToBundle(card_id, bundle_name);
             res.json(result);
         } catch (e) {
-            res.json({ success: false, error: e.message });
+            res.json({ success: false, msg: e.message });
         }
     });
 
@@ -1962,10 +2498,13 @@ function registerRoutes(app, staticDir) {
     app.post('/api/toggle_bundle_mode', (req, res) => {
         try {
             const { folder_path, action } = req.body || {};
-            const result = cards.toggleBundleMode ? cards.toggleBundleMode(folder_path, action) : { success: false, error: '功能未实现' };
+            if (!cards || typeof cards.toggleBundleMode !== 'function') {
+                return res.json({ success: false, msg: 'toggleBundleMode 不可用' });
+            }
+            const result = cards.toggleBundleMode(folder_path, action);
             res.json(result);
         } catch (e) {
-            res.json({ success: false, error: e.message });
+            res.json({ success: false, msg: e.message });
         }
     });
 
@@ -1973,7 +2512,10 @@ function registerRoutes(app, staticDir) {
     app.post('/api/find_card_page', (req, res) => {
         try {
             const { card_id, category, sort, page_size } = req.body || {};
-            const result = cards.findCardPage ? cards.findCardPage(card_id, { category, sort, pageSize: page_size }) : { success: true, page: 1 };
+            if (!cards || typeof cards.findCardPage !== 'function') {
+                return res.json({ success: false, msg: 'findCardPage 不可用', page: 1 });
+            }
+            const result = cards.findCardPage(card_id, { category, sort, pageSize: page_size });
             res.json(result);
         } catch (e) {
             res.json({ success: false, error: e.message });
@@ -2132,22 +2674,56 @@ function registerRoutes(app, staticDir) {
     app.post('/api/batch_tags', (req, res) => {
         try {
             const { card_ids, add_tags, remove_tags, add, remove } = req.body || {};
+            const targetIds = (Array.isArray(card_ids) ? card_ids : [card_ids]).filter(Boolean);
+            if (!targetIds.length) {
+                return res.json({ success: false, msg: '未提供卡片 ID' });
+            }
             const addTags = Array.isArray(add_tags) ? add_tags : (Array.isArray(add) ? add : []);
             const removeTags = Array.isArray(remove_tags) ? remove_tags : (Array.isArray(remove) ? remove : []);
-            let result = { success: true };
+            const allResults = [];
+            let updated = 0;
 
             if (addTags.length > 0) {
-                result = cards.addTags(card_ids, addTags);
+                const addResult = cards.addTags(targetIds, addTags);
+                if (!addResult.success) {
+                    return res.json({
+                        ...addResult,
+                        updated: 0,
+                        msg: addResult.error || addResult.message || '',
+                    });
+                }
+                updated += Number(addResult.updated || 0);
+                if (Array.isArray(addResult.results)) {
+                    allResults.push(...addResult.results);
+                }
             }
             if (removeTags.length > 0) {
-                result = cards.removeTags(card_ids, removeTags);
+                const removeResult = cards.removeTags(targetIds, removeTags);
+                if (!removeResult.success) {
+                    return res.json({
+                        ...removeResult,
+                        updated,
+                        msg: removeResult.error || removeResult.message || '',
+                    });
+                }
+                updated += Number(removeResult.updated || 0);
+                if (Array.isArray(removeResult.results)) {
+                    allResults.push(...removeResult.results);
+                }
             }
 
-            const updated = Array.isArray(result.results) ? result.results.filter(item => item && item.success).length : 0;
+            const changedSet = new Set(
+                allResults
+                    .filter(item => item && item.success && item.changed)
+                    .map(item => item.cardId)
+            );
+            const finalUpdated = changedSet.size || updated;
+
             res.json({
-                ...result,
-                updated,
-                msg: result.error || result.message || '',
+                success: true,
+                results: allResults,
+                updated: finalUpdated,
+                msg: '',
             });
         } catch (e) {
             res.json({ success: false, error: e.message });
@@ -2178,7 +2754,7 @@ function registerRoutes(app, staticDir) {
                 return res.json({ success: true, updated_cards: 0, total_tags_deleted: 0, msg: '没有匹配的卡片' });
             }
             const result = cards.removeTags(targetIds, normalizedTags);
-            const updatedCards = Array.isArray(result.results) ? result.results.filter(item => item && item.success).length : 0;
+            const updatedCards = Number(result.updated || 0);
             res.json({
                 ...result,
                 updated_cards: updatedCards,
@@ -3124,7 +3700,10 @@ function registerRoutes(app, staticDir) {
             if (!ruleset.oldId && ruleset.id) {
                 ruleset.oldId = ruleset.id;
             }
-            const result = automation.saveRuleset ? automation.saveRuleset(ruleset) : { success: false, error: '功能未实现' };
+            if (!automation || typeof automation.saveRuleset !== 'function') {
+                return res.json({ success: false, msg: 'automation.saveRuleset 不可用' });
+            }
+            const result = automation.saveRuleset(ruleset);
             res.json({
                 ...result,
                 msg: result.error || result.message || '',
@@ -3137,7 +3716,10 @@ function registerRoutes(app, staticDir) {
     // 删除规则集
     app.delete('/api/automation/rulesets/:id', (req, res) => {
         try {
-            const result = automation.deleteRuleset ? automation.deleteRuleset(req.params.id) : { success: false, error: '功能未实现' };
+            if (!automation || typeof automation.deleteRuleset !== 'function') {
+                return res.json({ success: false, msg: 'automation.deleteRuleset 不可用' });
+            }
+            const result = automation.deleteRuleset(req.params.id);
             res.json({
                 ...result,
                 msg: result.error || result.message || '',
@@ -3286,7 +3868,10 @@ function registerRoutes(app, staticDir) {
     // 创建备份
     app.post('/api/backup/create', (req, res) => {
         try {
-            const result = backup.trigger ? backup.trigger(req.body || {}) : { success: false, message: '功能未实现' };
+            if (!backup || typeof backup.trigger !== 'function') {
+                return res.json({ success: false, msg: 'backup.trigger 不可用' });
+            }
+            const result = backup.trigger(req.body || {});
             res.json(result);
         } catch (e) {
             res.json({ success: false, msg: e.message });
@@ -3297,7 +3882,10 @@ function registerRoutes(app, staticDir) {
     app.post('/api/backup/restore', (req, res) => {
         try {
             const { backup_id } = req.body || {};
-            const result = backup.restore ? backup.restore(backup_id) : { success: false, message: '功能未实现' };
+            if (!backup || typeof backup.restore !== 'function') {
+                return res.json({ success: false, msg: 'backup.restore 不可用' });
+            }
+            const result = backup.restore(backup_id);
             res.json(result);
         } catch (e) {
             res.json({ success: false, msg: e.message });
@@ -4273,3 +4861,4 @@ module.exports = {
     initModules,
     registerRoutes,
 };
+

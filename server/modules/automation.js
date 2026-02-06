@@ -560,47 +560,34 @@ function _splitTags(rawValue) {
 }
 
 function _applyTagChanges(cardId, addTagsSet, removeTagsSet) {
-    const card = resources.cards && resources.cards.getCard ? resources.cards.getCard(cardId) : null;
-    if (!card || !card.path || !card.path.toLowerCase().endsWith('.json')) {
+    if (!resources.cards) {
         return { changed: false, skipped: true };
     }
 
-    let payload;
-    try {
-        payload = JSON.parse(fs.readFileSync(card.path, 'utf-8'));
-    } catch (e) {
-        return { changed: false, skipped: true };
-    }
-
-    const dataBlock = (payload && payload.data && typeof payload.data === 'object')
-        ? payload.data
-        : payload;
-
-    const currentTags = Array.isArray(dataBlock.tags)
-        ? dataBlock.tags.map(t => String(t).trim()).filter(Boolean)
-        : [];
-    const tagSet = new Set(currentTags);
     let changed = false;
+    const details = [];
 
-    for (const tag of addTagsSet) {
-        if (!tagSet.has(tag)) {
-            tagSet.add(tag);
-            changed = true;
+    if (addTagsSet && addTagsSet.size > 0) {
+        const addResult = resources.cards.addTags([cardId], Array.from(addTagsSet));
+        const entry = Array.isArray(addResult.results) ? addResult.results[0] : null;
+        details.push({ phase: 'add', result: entry || addResult });
+        if (!addResult.success || !entry || !entry.success) {
+            return { changed: false, skipped: true, details };
         }
+        changed = changed || Boolean(entry.changed);
     }
-    for (const tag of removeTagsSet) {
-        if (tagSet.delete(tag)) {
-            changed = true;
+
+    if (removeTagsSet && removeTagsSet.size > 0) {
+        const removeResult = resources.cards.removeTags([cardId], Array.from(removeTagsSet));
+        const entry = Array.isArray(removeResult.results) ? removeResult.results[0] : null;
+        details.push({ phase: 'remove', result: entry || removeResult });
+        if (!removeResult.success || !entry || !entry.success) {
+            return { changed: false, skipped: true, details };
         }
+        changed = changed || Boolean(entry.changed);
     }
 
-    if (!changed) {
-        return { changed: false, skipped: false };
-    }
-
-    dataBlock.tags = Array.from(tagSet);
-    fs.writeFileSync(card.path, JSON.stringify(payload, null, 2), 'utf-8');
-    return { changed: true, skipped: false };
+    return { changed, skipped: false, details };
 }
 
 function _applyFavorite(uiData, cardId, favorite) {

@@ -24,6 +24,26 @@ SillyTavern 资源管理与自动化工具 - 完整集成插件
 
 ## 🆕 最近更新（对齐 ST-Manager）
 
+### 本轮对齐（服务端核心链路）
+- **`/api/update_card` 对齐**：已改为统一走 `cards.updateCard`，支持 **JSON/PNG** 卡片元数据写回，不再限制 PNG 仅只读。
+- **PNG 元数据写回补齐**：`server/modules/cards.js` 新增 PNG chunk 级写入能力（重写 `chara` 元数据，保留其他 chunk），并兼容 `chara/ccv3` 读取。
+- **标签写回补齐**：`cards.addTags/removeTags` 从占位实现升级为真实写回，支持 **JSON/PNG** 双格式。
+- **批量标签接口修复**：`/api/batch_tags` 改为合并处理 `add/remove`，并返回去重后的真实 `updated` 数。
+- **删除标签统计修复**：`/api/delete_tags` 使用底层真实更新计数，避免只按“请求参数”统计。
+- **自动化标签执行修复**：`automation.execute` 的标签动作改为复用 `cards` 模块，实现对 PNG/JSON 一致生效。
+- **收藏切换下沉到 cards 模块**：新增 `cards.toggleFavorite`，与 `/api/toggle_favorite` 对齐。
+
+### 本轮继续补齐（导入/更新/聚合）
+- **URL 导入补齐**：`/api/import_from_url` 已实现下载、临时文件复用、冲突检测（check/rename/overwrite/cancel）与最终落库返回。
+- **卡片文件更新补齐**：`/api/update_card_file` 已实现 multipart 解析、JSON/PNG 覆盖或扩展名切换、UI 数据保留、`updated_card` 返回。
+- **URL 更新补齐**：`/api/update_card_from_url` 已实现远程下载并复用文件更新流程。
+- **更换头像补齐**：`/api/change_image` 已实现 FormData 上传；支持 JSON/PNG 卡片的常见换图流程与必要的 ID 迁移。
+- **一键转包补齐**：`/api/convert_to_bundle` 已接入 `cards.convertToBundle`（移动卡片到新包目录并写 `.bundle` 标记）。
+- **聚合开关补齐**：`/api/toggle_bundle_mode` 已接入 `cards.toggleBundleMode`（check/enable/disable 基础流程）。
+- **分页定位补齐**：新增 `cards.findCardPage`，`/api/find_card_page` 不再固定返回第 1 页。
+- **剩余占位端点清理**：自动化规则集保存/删除、备份创建/恢复接口改为真实模块调用，不再走“功能未实现”占位返回。
+- **文件移动稳健性增强**：针对 Windows 环境 `EPERM`，卡片与导入链路加入 `rename -> copy` 回退，避免更新/导入/转包中断。
+
 ### 关键修复
 - **自动化执行修复**：`/api/automation/execute` 不再只做预览，现可真实执行移动、标签增删、收藏状态更新。
 - **自动化筛选修复**：支持按 `category + recursive` 批量执行规则，和 WebUI 的文件夹执行模式一致。
